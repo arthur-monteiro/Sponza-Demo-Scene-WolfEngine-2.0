@@ -1,0 +1,36 @@
+<html>
+  <head>
+	<style type="text/css">
+		.frameRate
+		{
+			font-size: 40px;
+			color: white;
+			position: fixed; 
+			bottom:0%;
+			width:100%;
+		}
+	</style>
+  </head>
+  <body>
+	<div class="frameRate" id="frameRate">FPS: 60</div>
+	<script type="text/javascript">
+	function updateFrameRate()
+	{
+		document.getElementById('frameRate').innerHTML = getFrameRate();
+
+		setTimeout(()=> 
+		{
+			updateFrameRate();
+		}, 1000);
+	}
+	
+	window.addEventListener('DOMContentLoaded', (event) => 
+	{
+	  setTimeout(()=> 
+	  {
+		updateFrameRate();
+      }, 1000);
+	});
+    </script>
+  </body>
+</html>

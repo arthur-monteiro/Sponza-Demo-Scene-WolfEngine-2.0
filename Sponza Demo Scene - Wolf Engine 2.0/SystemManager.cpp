@@ -26,15 +26,14 @@ void SystemManager::run()
 
 		if (m_gameState == GAME_STATE::LOADING)
 		{
-			if (m_mutex.try_lock())
-			{
-				std::vector<Wolf::PassBase*> passes(1);
-				passes[0] = m_loadingScreenUniquePass.get();
+			m_mutex.lock();
+			std::vector<Wolf::CommandRecordBase*> passes(1);
+			passes[0] = m_loadingScreenUniquePass.get();
 
-				m_wolfInstance->frame(passes, m_loadingScreenUniquePass->getSemaphore());
+			m_wolfInstance->frame(passes, m_loadingScreenUniquePass->getSemaphore());
 
-				m_mutex.unlock();
-			}
+			m_mutex.unlock();
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 		else if (m_gameState == GAME_STATE::RUNNING)
 		{

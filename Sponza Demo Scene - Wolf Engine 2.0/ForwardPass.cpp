@@ -12,25 +12,27 @@
 #include <ObjLoader.h>
 #include <Timer.h>
 
+#include "DepthPass.h"
 #include "Vertex2DTextured.h"
 
 using namespace Wolf;
 
-ForwardPass::ForwardPass(const Wolf::Mesh* sponzaMesh, std::vector<Wolf::Image*> images, const Wolf::Semaphore* waitSemaphore)
+ForwardPass::ForwardPass(const Wolf::Mesh* sponzaMesh, std::vector<Wolf::Image*> images, const Wolf::Semaphore* waitSemaphore, DepthPass* preDepthPass)
 {
 	m_sponzaMesh = sponzaMesh;
 	m_sponzaImages = std::move(images);
 	m_waitSemaphore = waitSemaphore;
+	m_preDepthPass = preDepthPass;
 }
 
 void ForwardPass::initializeResources(const InitializationContext& context)
 {
 	Timer timer("Forward pass initialization");
 
-	createDepthImage(context);
-
 	Attachment depth({ context.swapChainWidth, context.swapChainHeight }, context.depthFormat, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-		m_depthImage->getDefaultImageView());
+		m_preDepthPass->getOutput()->getDefaultImageView());
+	depth.loadOperation = VK_ATTACHMENT_LOAD_OP_LOAD;
+	depth.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	Attachment color({ context.swapChainWidth, context.swapChainHeight }, context.swapChainFormat, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, nullptr);
 
 	m_renderPass.reset(new RenderPass({ depth, color }));
@@ -62,7 +64,7 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 	{
 		m_sampler.reset(new Sampler(VK_SAMPLER_ADDRESS_MODE_REPEAT, m_sponzaImages[0]->getMipLevelCount(), VK_FILTER_LINEAR));
 
-		m_uniformBuffer.reset(new Buffer(sizeof(UBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::NEVER));
+		m_uniformBuffer.reset(new Buffer(sizeof(UBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
 
 		DescriptorSetGenerator descriptorSetGenerator(descriptorSetLayoutGenerator.getDescriptorLayouts());
 		descriptorSetGenerator.setBuffer(0, *m_uniformBuffer.get());
@@ -75,7 +77,7 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 		}
 		descriptorSetGenerator.setImages(2, sponzaImageDescriptions);
 
-		m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
+		m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
 		m_descriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
 	}
 
@@ -113,14 +115,14 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 
 void ForwardPass::resize(const Wolf::InitializationContext& context)
 {
-	createDepthImage(context);
 	m_renderPass->setExtent({ context.swapChainWidth, context.swapChainHeight });
 
 	m_frameBuffers.clear();
 	m_frameBuffers.resize(context.swapChainImageCount);
 
 	Attachment depth({ context.swapChainWidth, context.swapChainHeight }, context.depthFormat, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-		m_depthImage->getDefaultImageView());
+		m_preDepthPass->getOutput()->getDefaultImageView());
+	depth.loadOperation = VK_ATTACHMENT_LOAD_OP_LOAD;
 	Attachment color({ context.swapChainWidth, context.swapChainHeight }, context.swapChainFormat, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, nullptr);
 	for (uint32_t i = 0; i < context.swapChainImageCount; ++i)
 	{
@@ -129,6 +131,10 @@ void ForwardPass::resize(const Wolf::InitializationContext& context)
 	}
 
 	createPipelines(context.swapChainWidth, context.swapChainHeight);
+
+	DescriptorSetGenerator descriptorSetGenerator(m_userInterfaceDescriptorSetLayoutGenerator.getDescriptorLayouts());
+	descriptorSetGenerator.setCombinedImageSampler(0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, context.userInterfaceImage->getDefaultImageView(), *m_sampler.get());
+	m_userInterfaceDescriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
 }
 
 void ForwardPass::record(const Wolf::RecordContext& context)
@@ -141,7 +147,7 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 	mvp.projection[1][1] *= -1;
 	mvp.model = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
 	mvp.view = context.camera->getViewMatrix();
-	m_uniformBuffer->transferCPUMemory((void*)&mvp, sizeof(mvp), 0 /* srcOffet */ /*, context.commandBufferIdx*/);
+	m_uniformBuffer->transferCPUMemory((void*)&mvp, sizeof(mvp), 0 /* srcOffet */, context.commandBufferIdx);
 
 	/* Command buffer record */
 	uint32_t frameBufferIdx = context.swapChainImageIdx;
@@ -149,13 +155,13 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
 
 	std::vector<VkClearValue> clearValues(2);
-	clearValues[0] = { 1.0f };
+	clearValues[0] = { 0.0f };
 	clearValues[1] = { 0.1f, 0.1f, 0.1f, 1.0f };
 	m_renderPass->beginRenderPass(m_frameBuffers[frameBufferIdx]->getFramebuffer(), clearValues, m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipeline());
 
-	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSet->getDescriptorSet(/*context.commandBufferIdx*/), 0, nullptr);
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
 
 	m_sponzaMesh->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
@@ -185,19 +191,6 @@ void ForwardPass::submit(const Wolf::SubmitContext& context)
 		vkDeviceWaitIdle(context.device);
 		createPipelines(m_swapChainWidth, m_swapChainHeight);
 	}
-}
-
-void ForwardPass::createDepthImage(const Wolf::InitializationContext& context)
-{
-	CreateImageInfo depthImageCreateInfo;
-	depthImageCreateInfo.format = context.depthFormat;
-	depthImageCreateInfo.extent.width = context.swapChainWidth;
-	depthImageCreateInfo.extent.height = context.swapChainHeight;
-	depthImageCreateInfo.extent.depth = 1;
-	depthImageCreateInfo.mipLevelCount = 1;
-	depthImageCreateInfo.aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-	depthImageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-	m_depthImage.reset(new Image(depthImageCreateInfo));
 }
 
 void ForwardPass::createPipelines(uint32_t width, uint32_t height)
@@ -241,6 +234,10 @@ void ForwardPass::createPipelines(uint32_t width, uint32_t height)
 		// Color Blend
 		std::vector<RenderingPipelineCreateInfo::BLEND_MODE> blendModes = { RenderingPipelineCreateInfo::BLEND_MODE::OPAQUE };
 		pipelineCreateInfo.blendModes = blendModes;
+
+		// Depth testing
+		pipelineCreateInfo.enableDepthWrite = VK_FALSE;
+		pipelineCreateInfo.depthCompareOp = VK_COMPARE_OP_EQUAL;
 
 		m_pipeline.reset(new Pipeline(pipelineCreateInfo));
 	}
@@ -286,6 +283,9 @@ void ForwardPass::createPipelines(uint32_t width, uint32_t height)
 		pipelineCreateInfo.blendModes = blendModes;
 
 		m_userInterfacePipeline.reset(new Pipeline(pipelineCreateInfo));
+
+		// Depth testing
+		pipelineCreateInfo.enableDepthTesting = VK_FALSE;
 	}
 
 	m_swapChainWidth = width;

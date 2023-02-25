@@ -13,16 +13,19 @@
 #include <Timer.h>
 
 #include "DepthPass.h"
+#include "GameContext.h"
+#include "ShadowMaskComputePass.h"
 #include "Vertex2DTextured.h"
 
 using namespace Wolf;
 
-ForwardPass::ForwardPass(const Wolf::Mesh* sponzaMesh, std::vector<Wolf::Image*> images, const Wolf::Semaphore* waitSemaphore, DepthPass* preDepthPass)
+ForwardPass::ForwardPass(const Wolf::Mesh* sponzaMesh, std::vector<Wolf::Image*> images, DepthPass* preDepthPass, ShadowMaskComputePass* shadowMaskComputePass)
 {
 	m_sponzaMesh = sponzaMesh;
 	m_sponzaImages = std::move(images);
-	m_waitSemaphore = waitSemaphore;
+	m_preDepthPassSemaphore = preDepthPass->getSemaphore();
 	m_preDepthPass = preDepthPass;
+	m_shadowMaskComputePass = shadowMaskComputePass;
 }
 
 void ForwardPass::initializeResources(const InitializationContext& context)
@@ -49,12 +52,14 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 	m_signalSemaphore.reset(new Semaphore(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
 
 	DescriptorSetLayoutGenerator descriptorSetLayoutGenerator;
-	descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT, 0);
-	descriptorSetLayoutGenerator.addSampler(VK_SHADER_STAGE_FRAGMENT_BIT, 1);
-	descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 2, m_sponzaImages.size());
+	descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT,                                0); // matrices
+	descriptorSetLayoutGenerator.addSampler(VK_SHADER_STAGE_FRAGMENT_BIT,                                    1);
+	descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT,   2, m_sponzaImages.size());
+	descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_FRAGMENT_BIT,                               3);
+	descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_FRAGMENT_BIT,                              4); // light ub
 	m_descriptorSetLayout.reset(new DescriptorSetLayout(descriptorSetLayoutGenerator.getDescriptorLayouts()));
 
-	m_vertexShaderParser.reset(new ShaderParser("Shaders/shader.vert"));
+	m_vertexShaderParser.reset(new ShaderParser("Shaders/shader.vert", { "COMPUTE_SHADOWS" }));
 	m_fragmentShaderParser.reset(new ShaderParser("Shaders/shader.frag"));
 
 	m_userInterfaceVertexShaderParser.reset(new ShaderParser("Shaders/UI.vert"));
@@ -64,10 +69,11 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 	{
 		m_sampler.reset(new Sampler(VK_SAMPLER_ADDRESS_MODE_REPEAT, m_sponzaImages[0]->getMipLevelCount(), VK_FILTER_LINEAR));
 
-		m_uniformBuffer.reset(new Buffer(sizeof(UBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
+		m_mvpUniformBuffer.reset(new Buffer(sizeof(MatricesUBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
+		m_lightUniformBuffer.reset(new Buffer(sizeof(LightUBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
 
 		DescriptorSetGenerator descriptorSetGenerator(descriptorSetLayoutGenerator.getDescriptorLayouts());
-		descriptorSetGenerator.setBuffer(0, *m_uniformBuffer.get());
+		descriptorSetGenerator.setBuffer(0, *m_mvpUniformBuffer.get());
 		descriptorSetGenerator.setSampler(1, *m_sampler.get());
 		std::vector<DescriptorSetGenerator::ImageDescription> sponzaImageDescriptions(m_sponzaImages.size());
 		for (uint32_t i = 0; i < m_sponzaImages.size(); ++i)
@@ -76,6 +82,11 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 			sponzaImageDescriptions[i].imageView = m_sponzaImages[i]->getDefaultImageView();
 		}
 		descriptorSetGenerator.setImages(2, sponzaImageDescriptions);
+		DescriptorSetGenerator::ImageDescription shadowMaskDesc;
+		shadowMaskDesc.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		shadowMaskDesc.imageView = m_shadowMaskComputePass->getOutput()->getDefaultImageView();
+		descriptorSetGenerator.setImage(3, shadowMaskDesc);
+		descriptorSetGenerator.setBuffer(4, *m_lightUniformBuffer.get());
 
 		m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
 		m_descriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
@@ -139,20 +150,30 @@ void ForwardPass::resize(const Wolf::InitializationContext& context)
 
 void ForwardPass::record(const Wolf::RecordContext& context)
 {
+	const GameContext* gameContext = (const GameContext*)context.gameContext;
+
 	/* Update */
-	UBData mvp;
+	MatricesUBData mvp;
 	constexpr float near = 0.1f;
 	constexpr float far = 100.0f;
-	mvp.projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, near, far);
-	mvp.projection[1][1] *= -1;
+	mvp.projection = context.camera->getProjection();
 	mvp.model = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
 	mvp.view = context.camera->getViewMatrix();
-	m_uniformBuffer->transferCPUMemory((void*)&mvp, sizeof(mvp), 0 /* srcOffet */, context.commandBufferIdx);
+	m_mvpUniformBuffer->transferCPUMemory((void*)&mvp, sizeof(mvp), 0 /* srcOffet */, context.commandBufferIdx);
+
+	LightUBData lightUBData;
+	lightUBData.colorDirectionalLight = gameContext->sunColor;
+	lightUBData.directionDirectionalLight = glm::transpose(glm::inverse(mvp.view)) * glm::vec4(gameContext->sunDirection, 1.0f);
+	m_lightUniformBuffer->transferCPUMemory((void*)&lightUBData, sizeof(lightUBData), 0 /* srcOffet */, context.commandBufferIdx);
 
 	/* Command buffer record */
 	uint32_t frameBufferIdx = context.swapChainImageIdx;
 
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
+
+	m_preDepthPass->getOutput()->setImageLayoutWithoutOperation(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL); // at this point, preDepthPass should have set layout with render pass
+	m_preDepthPass->getOutput()->transitionImageLayout(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
 
 	std::vector<VkClearValue> clearValues(2);
 	clearValues[0] = { 0.0f };
@@ -178,7 +199,7 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 
 void ForwardPass::submit(const Wolf::SubmitContext& context)
 {
-	std::vector<const Semaphore*> waitSemaphores{ m_waitSemaphore };
+	std::vector<const Semaphore*> waitSemaphores{ m_shadowMaskComputePass->getSemaphore()};
 	std::vector<VkSemaphore> signalSemaphores{ m_signalSemaphore->getSemaphore() };
 	m_commandBuffer->submit(context.commandBufferIdx, waitSemaphores, signalSemaphores, context.frameFence);
 

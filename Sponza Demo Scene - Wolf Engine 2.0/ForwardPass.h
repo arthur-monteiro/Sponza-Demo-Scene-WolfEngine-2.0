@@ -20,11 +20,12 @@
 #include <ShaderParser.h>
 
 class DepthPass;
+class ShadowMaskComputePass;
 
 class ForwardPass : public Wolf::CommandRecordBase
 {
 public:
-	ForwardPass(const Wolf::Mesh* sponzaMesh, std::vector<Wolf::Image*> images, const Wolf::Semaphore* waitSemaphore, DepthPass* preDepthPass);
+	ForwardPass(const Wolf::Mesh* sponzaMesh, std::vector<Wolf::Image*> images, DepthPass* preDepthPass, ShadowMaskComputePass* shadowMaskComputePass);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
@@ -43,7 +44,8 @@ private:
 	std::vector<std::unique_ptr<Wolf::Framebuffer>> m_frameBuffers;
 
 	std::unique_ptr<Wolf::Semaphore> m_signalSemaphore;
-	const Wolf::Semaphore* m_waitSemaphore;
+	const Wolf::Semaphore* m_preDepthPassSemaphore;
+	ShadowMaskComputePass* m_shadowMaskComputePass;
 
 	/* Pipeline */
 	std::unique_ptr<Wolf::ShaderParser> m_vertexShaderParser;
@@ -61,13 +63,22 @@ private:
 	const Wolf::Mesh* m_sponzaMesh;
 	std::vector<Wolf::Image*> m_sponzaImages;
 	std::unique_ptr<Wolf::Sampler> m_sampler;
-	struct UBData
+	struct MatricesUBData
 	{
 		glm::mat4 model;
 		glm::mat4 view;
 		glm::mat4 projection;
 	};
-	std::unique_ptr<Wolf::Buffer> m_uniformBuffer;
+	std::unique_ptr<Wolf::Buffer> m_mvpUniformBuffer;
+
+	struct LightUBData
+	{
+		glm::vec3 directionDirectionalLight;
+		float padding;
+
+		glm::vec3 colorDirectionalLight;
+	};
+	std::unique_ptr<Wolf::Buffer> m_lightUniformBuffer;
 
 	std::unique_ptr<Wolf::DescriptorSetLayout> m_descriptorSetLayout;
 	std::unique_ptr<Wolf::DescriptorSet> m_descriptorSet;

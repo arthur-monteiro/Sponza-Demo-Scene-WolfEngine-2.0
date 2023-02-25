@@ -59,8 +59,7 @@ void DepthPass::record(const Wolf::RecordContext& context)
 	UBData mvp;
 	constexpr float near = 0.1f;
 	constexpr float far = 100.0f;
-	mvp.projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, near, far);
-	mvp.projection[1][1] *= -1;
+	mvp.projection = context.camera->getProjection();
 	mvp.model = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
 	mvp.view = context.camera->getViewMatrix();
 	m_uniformBuffer->transferCPUMemory((void*)&mvp, sizeof(mvp), 0 /* srcOffet */ , context.commandBufferIdx);

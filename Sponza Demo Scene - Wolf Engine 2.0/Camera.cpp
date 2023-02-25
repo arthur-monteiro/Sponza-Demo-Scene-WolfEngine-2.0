@@ -60,19 +60,19 @@ void Camera::update(GLFWwindow* window)
 	previousPos = m_position;
 }
 
-glm::mat4 Camera::getViewMatrix()
+glm::mat4 Camera::getViewMatrix() const
 {
 	return glm::lookAt(m_position, m_target, m_verticalAxis);
 
 	//return glm::lookAt(m_position, glm::normalize(m_position + forceOrientation), m_verticalAxis);
 }
 
-glm::vec3 Camera::getPosition()
+glm::vec3 Camera::getPosition() const
 {
 	return m_position;
 }
 
-glm::mat4 Camera::getProjection()
+glm::mat4 Camera::getProjection() const
 {
 	glm::mat4 r = glm::perspective(m_radFOV, m_aspect, m_near, m_far);
 	r[1][1] *= -1;

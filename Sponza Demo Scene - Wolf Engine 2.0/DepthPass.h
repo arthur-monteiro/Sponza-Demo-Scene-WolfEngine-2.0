@@ -34,6 +34,8 @@ private:
 
 	uint32_t getWidth() override { return m_swapChainWidth; }
 	uint32_t getHeight() override { return m_swapChainHeight; }
+	VkImageUsageFlags getAdditionalUsages() override { return VK_IMAGE_USAGE_SAMPLED_BIT; }
+	VkImageLayout getFinalLayout() override { return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; }
 
 	void recordDraws(const Wolf::RecordContext& context) override;
 	VkCommandBuffer getCommandBuffer(const Wolf::RecordContext& context) override;

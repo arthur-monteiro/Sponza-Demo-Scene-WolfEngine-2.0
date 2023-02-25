@@ -2,6 +2,7 @@
 
 #include <WolfEngine.h>
 
+#include "GameContext.h"
 #include "LoadingScreenUniquePass.h"
 #include "SponzaModel.h"
 #include "SponzaScene.h"
@@ -39,5 +40,7 @@ private:
 	uint32_t m_currentFramesAccumulated = 0;
 	uint32_t m_stableFPS = 0;
 	std::chrono::steady_clock::time_point m_startTimeFPSCounter = std::chrono::steady_clock::now();
+
+	std::vector<GameContext> m_gameContexts;
 };
 

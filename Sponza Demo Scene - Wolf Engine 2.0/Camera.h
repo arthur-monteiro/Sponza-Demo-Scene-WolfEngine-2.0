@@ -22,14 +22,14 @@ public:
 
 	void update(GLFWwindow* window) override;
 
-	glm::mat4 getViewMatrix() override;
-	glm::mat4 getProjection() override;
-	glm::vec3 getPosition();
-	float getNear() const { return m_near; }
-	float getFar() const { return m_far; }
-	glm::vec3 getOrientation() const { return m_orientation; }
+	glm::mat4 getViewMatrix() const override;
+	glm::mat4 getProjection() const override;
+	glm::vec3 getPosition() const override;
+	float getNear() const override { return m_near; }
+	float getFar() const override { return m_far; }
+	glm::vec3 getOrientation() const override { return m_orientation; }
 	glm::vec3 getTarget() const { return m_target; }
-	float getFOV() const { return m_radFOV; }
+	float getFOV() const override { return m_radFOV; }
 
 	void setPosition(glm::vec3 position);
 	void setTarget(glm::vec3 target);

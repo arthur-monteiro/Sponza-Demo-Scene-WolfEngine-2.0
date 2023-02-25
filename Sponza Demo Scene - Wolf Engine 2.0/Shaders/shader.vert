@@ -18,6 +18,7 @@ layout(location = 0) out vec3 outViewPos;
 layout(location = 1) out vec2 outTexCoord;
 layout(location = 2) out uint outMaterialID;
 layout(location = 3) out mat3 outTBN;
+layout(location = 6) out vec3 outRawPosition;
  
 out gl_PerVertex
 {
@@ -38,7 +39,7 @@ void main()
 
 	mat3 usedModelMatrix = transpose(inverse(mat3(ubMVP.view * ubMVP.model)));
     vec3 n = normalize(usedModelMatrix * inNormal);
-	vec3 t = normalize(usedModelMatrix * /*inTangent*/ vec3(1, 0, 0));
+	vec3 t = normalize(usedModelMatrix * inTangent);
 	t = normalize(t - dot(t, n) * n);
 	vec3 b = normalize(cross(t, n));
 	outTBN = inverse(mat3(t, b, n));
@@ -46,4 +47,5 @@ void main()
 	outViewPos = viewPos.xyz;
     outTexCoord = inTexCoord;
 	outMaterialID = inMaterialID;
+	outRawPosition = inPosition;
 } 

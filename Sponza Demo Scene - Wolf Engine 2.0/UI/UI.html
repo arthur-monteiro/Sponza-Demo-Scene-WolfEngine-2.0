@@ -1,18 +1,27 @@
 <html>
   <head>
-	<style type="text/css">
-		.frameRate
-		{
-			font-size: 40px;
-			color: white;
-			position: fixed; 
-			bottom:0%;
-			width:100%;
-		}
-	</style>
+	<link rel="stylesheet" href="style.css">
   </head>
   <body>
+	<div id="menu">
+		<div class="card">
+			<div class="card-title">Sun Position Phi</div>
+			<wolf-slider
+				max="1"
+				onchange="setSunPhi"
+			></wolf-slider>
+		</div>
+		<div class="card">
+			<div class="card-title">Sun Position Theta</div>
+			<wolf-slider
+				max="1"
+				onchange="setSunTheta"
+			></wolf-slider>
+		</div>
+	</div>
 	<div class="frameRate" id="frameRate">FPS: 60</div>
+
+    <script src="./slider.js"></script>
 	<script type="text/javascript">
 	function updateFrameRate()
 	{

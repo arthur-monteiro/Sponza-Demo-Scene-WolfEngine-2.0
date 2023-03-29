@@ -26,15 +26,14 @@ void SystemManager::run()
 
 		if (m_gameState == GAME_STATE::LOADING)
 		{
-			if (m_mutex.try_lock())
-			{
-				std::vector<Wolf::PassBase*> passes(1);
-				passes[0] = m_loadingScreenUniquePass.get();
+			m_mutex.lock();
+			std::vector<Wolf::CommandRecordBase*> passes(1);
+			passes[0] = m_loadingScreenUniquePass.get();
 
-				m_wolfInstance->frame(passes, m_loadingScreenUniquePass->getSemaphore());
+			m_wolfInstance->frame(passes, m_loadingScreenUniquePass->getSemaphore());
 
-				m_mutex.unlock();
-			}
+			m_mutex.unlock();
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 		else if (m_gameState == GAME_STATE::RUNNING)
 		{
@@ -71,6 +70,15 @@ void SystemManager::createWolfInstance()
 	ultralight::JSObject jsObject;
 	m_wolfInstance->getUserInterfaceJSObject(jsObject);
 	jsObject["getFrameRate"] = (ultralight::JSCallbackWithRetval)std::bind(&SystemManager::getFrameRate, this, std::placeholders::_1, std::placeholders::_2);
+
+	m_gameContexts.reserve(g_configuration->getMaxCachedFrames());
+	std::vector<void*> contextPtrs(g_configuration->getMaxCachedFrames());
+	for (uint32_t i = 0; i < g_configuration->getMaxCachedFrames(); ++i)
+	{
+		m_gameContexts.push_back(GameContext(glm::vec3(1.5f, -5.0f, -1.0f), glm::vec3(10.0f, 9.0f, 6.0f)));
+		contextPtrs[i] = &m_gameContexts.back();
+	}
+	m_wolfInstance->setGameContexts(contextPtrs);
 }
 
 void SystemManager::loadSponzaScene()

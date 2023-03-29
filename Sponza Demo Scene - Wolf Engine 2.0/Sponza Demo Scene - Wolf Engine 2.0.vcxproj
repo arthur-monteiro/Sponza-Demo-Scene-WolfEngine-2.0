@@ -132,19 +132,24 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="CascadedShadowMapping.cpp" />
     <ClCompile Include="DepthPass.cpp" />
     <ClCompile Include="ForwardPass.cpp" />
     <ClCompile Include="LoadingScreenUniquePass.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="ShadowMaskComputePass.cpp" />
     <ClCompile Include="SponzaModel.cpp" />
     <ClCompile Include="SponzaScene.cpp" />
     <ClCompile Include="SystemManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="CascadedShadowMapping.h" />
     <ClInclude Include="DepthPass.h" />
     <ClInclude Include="ForwardPass.h" />
+    <ClInclude Include="GameContext.h" />
     <ClInclude Include="LoadingScreenUniquePass.h" />
+    <ClInclude Include="ShadowMaskComputePass.h" />
     <ClInclude Include="SponzaModel.h" />
     <ClInclude Include="SponzaScene.h" />
     <ClInclude Include="SystemManager.h" />

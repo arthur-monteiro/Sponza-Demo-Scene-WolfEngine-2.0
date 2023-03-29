@@ -1,5 +1,12 @@
 #include "LoadingScreenUniquePass.h"
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/hash.hpp>
+
 #include <Attachment.h>
 #include <DescriptorSetGenerator.h>
 #include <DescriptorSetLayoutGenerator.h>
@@ -28,32 +35,54 @@ void LoadingScreenUniquePass::initializeResources(const Wolf::InitializationCont
 
 	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
 
-	DescriptorSetLayoutGenerator descriptorSetLayoutGenerator;
-	descriptorSetLayoutGenerator.addCombinedImageSampler(VK_SHADER_STAGE_FRAGMENT_BIT, 0);
-	m_descriptorSetLayout.reset(new DescriptorSetLayout(descriptorSetLayoutGenerator.getDescriptorLayouts()));
+	DescriptorSetLayoutGenerator loadingScreenDescriptorSetLayoutGenerator;
+	loadingScreenDescriptorSetLayoutGenerator.addCombinedImageSampler(VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+	m_loadingScreenDescriptorSetLayout.reset(new DescriptorSetLayout(loadingScreenDescriptorSetLayoutGenerator.getDescriptorLayouts()));
 
-	ImageFileLoader imageFileLoader("Textures/loadingScreen.jpg");
+	DescriptorSetLayoutGenerator loadingIconDescriptorSetLayoutGenerator;
+	loadingIconDescriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT, 0);
+	loadingIconDescriptorSetLayoutGenerator.addCombinedImageSampler(VK_SHADER_STAGE_FRAGMENT_BIT, 1);
+	m_loadingIconDescriptorSetLayout.reset(new DescriptorSetLayout(loadingIconDescriptorSetLayoutGenerator.getDescriptorLayouts()));
+
+	ImageFileLoader loadingScreenFileLoader("Textures/loadingScreen.jpg");
 	CreateImageInfo createImageInfo;
-	createImageInfo.extent = { (uint32_t)imageFileLoader.getWidth(), (uint32_t)imageFileLoader.getHeight(), 1 };
+	createImageInfo.extent = { (uint32_t)loadingScreenFileLoader.getWidth(), (uint32_t)loadingScreenFileLoader.getHeight(), 1 };
 	createImageInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-	createImageInfo.format = imageFileLoader.getFormat();
+	createImageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
 	createImageInfo.mipLevelCount = 1;
 	createImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 	m_loadingScreenTexture.reset(new Image(createImageInfo));
-	m_loadingScreenTexture->copyCPUBuffer(imageFileLoader.getPixels());
+	m_loadingScreenTexture->copyCPUBuffer(loadingScreenFileLoader.getPixels());
+
+	ImageFileLoader loadingIconFileLoader("Textures/loadingIcon.png");
+	createImageInfo.extent = { (uint32_t)loadingIconFileLoader.getWidth(), (uint32_t)loadingIconFileLoader.getHeight(), 1 };
+	m_loadingIconTexture.reset(new Image(createImageInfo));
+	m_loadingIconTexture->copyCPUBuffer(loadingIconFileLoader.getPixels());
 
 	m_sampler.reset(new Sampler(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER, 1.0f, VK_FILTER_LINEAR));
 
-	DescriptorSetGenerator descriptorSetGenerator(descriptorSetLayoutGenerator.getDescriptorLayouts());
-	descriptorSetGenerator.setCombinedImageSampler(0, m_loadingScreenTexture->getImageLayout(), m_loadingScreenTexture->getDefaultImageView(), *m_sampler.get());
+	m_loadingIconUniformBuffer.reset(new Buffer(sizeof(glm::mat4), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
 
-	m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
-	m_descriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
+	DescriptorSetGenerator loadingScreenDescriptorSetGenerator(loadingScreenDescriptorSetLayoutGenerator.getDescriptorLayouts());
+	loadingScreenDescriptorSetGenerator.setCombinedImageSampler(0, m_loadingScreenTexture->getImageLayout(), m_loadingScreenTexture->getDefaultImageView(), *m_sampler.get());
 
-	m_vertexShaderParser.reset(new ShaderParser("Shaders/loadingScreen/shader.vert"));
-	m_fragmentShaderParser.reset(new ShaderParser("Shaders/loadingScreen/shader.frag"));
+	m_loadingScreenDescriptorSet.reset(new DescriptorSet(m_loadingScreenDescriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
+	m_loadingScreenDescriptorSet->update(loadingScreenDescriptorSetGenerator.getDescriptorSetCreateInfo());
 
-	createPipeline(context.swapChainWidth, context.swapChainHeight);
+	m_loadingScreenVertexShaderParser.reset(new ShaderParser("Shaders/loadingScreen/loadingScreen.vert"));
+	m_loadingScreenFragmentShaderParser.reset(new ShaderParser("Shaders/loadingScreen/loadingScreen.frag"));
+
+	DescriptorSetGenerator loadingIconDescriptorSetGenerator(loadingIconDescriptorSetLayoutGenerator.getDescriptorLayouts());
+	loadingIconDescriptorSetGenerator.setBuffer(0, *m_loadingIconUniformBuffer.get());
+	loadingIconDescriptorSetGenerator.setCombinedImageSampler(1, m_loadingIconTexture->getImageLayout(), m_loadingIconTexture->getDefaultImageView(), *m_sampler.get());
+
+	m_loadingIconDescriptorSet.reset(new DescriptorSet(m_loadingIconDescriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
+	m_loadingIconDescriptorSet->update(loadingIconDescriptorSetGenerator.getDescriptorSetCreateInfo());
+
+	m_loadingIconVertexShaderParser.reset(new ShaderParser("Shaders/loadingScreen/loadingIcon.vert"));
+	m_loadingIconFragmentShaderParser.reset(new ShaderParser("Shaders/loadingScreen/loadingIcon.frag"));
+
+	createPipelines(context.swapChainWidth, context.swapChainHeight);
 
 	// Load fullscreen rect
 	std::vector<Vertex2DTextured> vertices =
@@ -70,7 +99,7 @@ void LoadingScreenUniquePass::initializeResources(const Wolf::InitializationCont
 		2, 3, 1
 	};
 
-	m_fullscreenRect.reset(new Mesh(vertices, indices));
+	m_rectMesh.reset(new Mesh(vertices, indices));
 }
 
 void LoadingScreenUniquePass::resize(const Wolf::InitializationContext& context)
@@ -87,11 +116,17 @@ void LoadingScreenUniquePass::resize(const Wolf::InitializationContext& context)
 		m_frameBuffers[i].reset(new Framebuffer(m_renderPass->getRenderPass(), { color }));
 	}
 
-	createPipeline(context.swapChainWidth, context.swapChainHeight);
+	createPipelines(context.swapChainWidth, context.swapChainHeight);
 }
 
 void LoadingScreenUniquePass::record(const Wolf::RecordContext& context)
 {
+	/* Update */
+	std::chrono::steady_clock::time_point currentTimer = std::chrono::steady_clock::now();
+	float timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(currentTimer - m_startTimer).count() / 1'000.0f;
+	glm::mat4 transform = glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(0.8f, 0.75f, 0.0f)), timeDiff * 2.0f, glm::vec3(0.0f, 0.0f, 1.0f)), glm::vec3(0.15f, 0.15f, 1.0f));
+	m_loadingIconUniformBuffer->transferCPUMemory(&transform, sizeof(transform), 0, context.commandBufferIdx);
+
 	/* Command buffer record */
 	uint32_t frameBufferIdx = context.swapChainImageIdx;
 
@@ -102,11 +137,13 @@ void LoadingScreenUniquePass::record(const Wolf::RecordContext& context)
 	clearValues[1] = { 0.1f, 0.1f, 0.1f, 1.0f };
 	m_renderPass->beginRenderPass(m_frameBuffers[frameBufferIdx]->getFramebuffer(), clearValues, m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
-	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipeline());
+	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_loadingScreenPipeline->getPipeline());
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_loadingScreenPipeline->getPipelineLayout(), 0, 1, m_loadingScreenDescriptorSet->getDescriptorSet(), 0, nullptr);
+	m_rectMesh->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
-	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
-
-	m_fullscreenRect->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_loadingIconPipeline->getPipeline());
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_loadingIconPipeline->getPipelineLayout(), 0, 1, m_loadingIconDescriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
+	m_rectMesh->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
 	m_renderPass->endRenderPass(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
@@ -119,58 +156,108 @@ void LoadingScreenUniquePass::submit(const Wolf::SubmitContext& context)
 	std::vector<VkSemaphore> signalSemaphores{ m_semaphore->getSemaphore() };
 	m_commandBuffer->submit(context.commandBufferIdx, waitSemaphores, signalSemaphores, context.frameFence);
 
-	bool anyShaderModified = m_vertexShaderParser->compileIfFileHasBeenModified();
-	if (m_fragmentShaderParser->compileIfFileHasBeenModified())
+	bool anyShaderModified = m_loadingScreenVertexShaderParser->compileIfFileHasBeenModified();
+	if (m_loadingScreenFragmentShaderParser->compileIfFileHasBeenModified())
+		anyShaderModified = true;
+	if (m_loadingIconVertexShaderParser->compileIfFileHasBeenModified())
+		anyShaderModified = true;
+	if (m_loadingIconFragmentShaderParser->compileIfFileHasBeenModified())
 		anyShaderModified = true;
 
 	if (anyShaderModified)
 	{
 		vkDeviceWaitIdle(context.device);
-		createPipeline(m_swapChainWidth, m_swapChainHeight);
+		createPipelines(m_swapChainWidth, m_swapChainHeight);
 	}
 }
 
-void LoadingScreenUniquePass::createPipeline(uint32_t width, uint32_t height)
+void LoadingScreenUniquePass::createPipelines(uint32_t width, uint32_t height)
 {
-	RenderingPipelineCreateInfo pipelineCreateInfo;
-	pipelineCreateInfo.renderPass = m_renderPass->getRenderPass();
+	// Loading screen
+	{
+		RenderingPipelineCreateInfo pipelineCreateInfo;
+		pipelineCreateInfo.renderPass = m_renderPass->getRenderPass();
 
-	// Programming stages
-	std::vector<char> vertexShaderCode;
-	m_vertexShaderParser->readCompiledShader(vertexShaderCode);
-	std::vector<char> fragmentShaderCode;
-	m_fragmentShaderParser->readCompiledShader(fragmentShaderCode);
+		// Programming stages
+		std::vector<char> vertexShaderCode;
+		m_loadingScreenVertexShaderParser->readCompiledShader(vertexShaderCode);
+		std::vector<char> fragmentShaderCode;
+		m_loadingScreenFragmentShaderParser->readCompiledShader(fragmentShaderCode);
 
-	std::vector<ShaderCreateInfo> shaders(2);
-	shaders[0].shaderCode = vertexShaderCode;
-	shaders[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-	shaders[1].shaderCode = fragmentShaderCode;
-	shaders[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+		std::vector<ShaderCreateInfo> shaders(2);
+		shaders[0].shaderCode = vertexShaderCode;
+		shaders[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+		shaders[1].shaderCode = fragmentShaderCode;
+		shaders[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	pipelineCreateInfo.shaderCreateInfos = shaders;
+		pipelineCreateInfo.shaderCreateInfos = shaders;
 
-	// IA
-	std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
-	Vertex2DTextured::getAttributeDescriptions(attributeDescriptions, 0);
-	pipelineCreateInfo.vertexInputAttributeDescriptions = attributeDescriptions;
+		// IA
+		std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+		Vertex2DTextured::getAttributeDescriptions(attributeDescriptions, 0);
+		pipelineCreateInfo.vertexInputAttributeDescriptions = attributeDescriptions;
 
-	std::vector<VkVertexInputBindingDescription> bindingDescriptions(1);
-	bindingDescriptions[0] = {};
-	Vertex2DTextured::getBindingDescription(bindingDescriptions[0], 0);
-	pipelineCreateInfo.vertexInputBindingDescriptions = bindingDescriptions;
+		std::vector<VkVertexInputBindingDescription> bindingDescriptions(1);
+		bindingDescriptions[0] = {};
+		Vertex2DTextured::getBindingDescription(bindingDescriptions[0], 0);
+		pipelineCreateInfo.vertexInputBindingDescriptions = bindingDescriptions;
 
-	// Resources
-	std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { m_descriptorSetLayout->getDescriptorSetLayout() };
-	pipelineCreateInfo.descriptorSetLayouts = descriptorSetLayouts;
+		// Resources
+		std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { m_loadingScreenDescriptorSetLayout->getDescriptorSetLayout() };
+		pipelineCreateInfo.descriptorSetLayouts = descriptorSetLayouts;
 
-	// Viewport
-	pipelineCreateInfo.extent = { width, height };
+		// Viewport
+		pipelineCreateInfo.extent = { width, height };
 
-	// Color Blend
-	std::vector<RenderingPipelineCreateInfo::BLEND_MODE> blendModes = { RenderingPipelineCreateInfo::BLEND_MODE::OPAQUE };
-	pipelineCreateInfo.blendModes = blendModes;
+		// Color Blend
+		std::vector<RenderingPipelineCreateInfo::BLEND_MODE> blendModes = { RenderingPipelineCreateInfo::BLEND_MODE::OPAQUE };
+		pipelineCreateInfo.blendModes = blendModes;
 
-	m_pipeline.reset(new Pipeline(pipelineCreateInfo));
+		m_loadingScreenPipeline.reset(new Pipeline(pipelineCreateInfo));
+	}
+
+	// Loading Icon
+	{
+		RenderingPipelineCreateInfo pipelineCreateInfo;
+		pipelineCreateInfo.renderPass = m_renderPass->getRenderPass();
+
+		// Programming stages
+		std::vector<char> vertexShaderCode;
+		m_loadingIconVertexShaderParser->readCompiledShader(vertexShaderCode);
+		std::vector<char> fragmentShaderCode;
+		m_loadingIconFragmentShaderParser->readCompiledShader(fragmentShaderCode);
+
+		std::vector<ShaderCreateInfo> shaders(2);
+		shaders[0].shaderCode = vertexShaderCode;
+		shaders[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+		shaders[1].shaderCode = fragmentShaderCode;
+		shaders[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		pipelineCreateInfo.shaderCreateInfos = shaders;
+
+		// IA
+		std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+		Vertex2DTextured::getAttributeDescriptions(attributeDescriptions, 0);
+		pipelineCreateInfo.vertexInputAttributeDescriptions = attributeDescriptions;
+
+		std::vector<VkVertexInputBindingDescription> bindingDescriptions(1);
+		bindingDescriptions[0] = {};
+		Vertex2DTextured::getBindingDescription(bindingDescriptions[0], 0);
+		pipelineCreateInfo.vertexInputBindingDescriptions = bindingDescriptions;
+
+		// Resources
+		std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { m_loadingIconDescriptorSetLayout->getDescriptorSetLayout() };
+		pipelineCreateInfo.descriptorSetLayouts = descriptorSetLayouts;
+
+		// Viewport
+		pipelineCreateInfo.extent = { width, height };
+
+		// Color Blend
+		std::vector<RenderingPipelineCreateInfo::BLEND_MODE> blendModes = { RenderingPipelineCreateInfo::BLEND_MODE::TRANS_ALPHA };
+		pipelineCreateInfo.blendModes = blendModes;
+
+		m_loadingIconPipeline.reset(new Pipeline(pipelineCreateInfo));
+	}
 
 	m_swapChainWidth = width;
 	m_swapChainHeight = height;

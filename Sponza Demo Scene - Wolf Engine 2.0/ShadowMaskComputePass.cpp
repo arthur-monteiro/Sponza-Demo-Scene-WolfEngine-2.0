@@ -28,7 +28,8 @@ void ShadowMaskComputePass::initializeResources(const Wolf::InitializationContex
 	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 2, CascadedShadowMapping::CASCADE_COUNT); // cascade depth images
 	m_descriptorSetLayoutGenerator.addSampler(VK_SHADER_STAGE_COMPUTE_BIT, 3);
 	m_descriptorSetLayoutGenerator.addCombinedImageSampler(VK_SHADER_STAGE_COMPUTE_BIT, 4); // noise map
-	m_descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_COMPUTE_BIT, 5); // output mask
+	m_descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_COMPUTE_BIT, 5); // previous output mask
+	m_descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_COMPUTE_BIT, 6); // output mask
 	m_descriptorSetLayout.reset(new DescriptorSetLayout(m_descriptorSetLayoutGenerator.getDescriptorLayouts()));
 
 	m_uniformBuffer.reset(new Buffer(sizeof(ShadowUBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
@@ -68,25 +69,34 @@ void ShadowMaskComputePass::initializeResources(const Wolf::InitializationContex
 	m_noiseSampler.reset(new Sampler(VK_SAMPLER_ADDRESS_MODE_REPEAT, 1.0f, VK_FILTER_NEAREST));
 
 	createPipeline();
-	createOutputImage(context.swapChainWidth, context.swapChainHeight);
+	createOutputImages(context.swapChainWidth, context.swapChainHeight);
 
-	m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
+	for(uint32_t i = 0; i < MASK_COUNT; ++i)
+		m_descriptorSets[i].reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
 	updateDescriptorSet(context);
+
+	for (uint32_t i = 0; i < m_noiseRotations.size(); ++i)
+	{
+		m_noiseRotations[i] = static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 3.14f * 2.0f;
+	}
 }
 
 void ShadowMaskComputePass::resize(const Wolf::InitializationContext& context)
 {
-	createOutputImage(context.swapChainWidth, context.swapChainHeight);
+	createOutputImages(context.swapChainWidth, context.swapChainHeight);
 	updateDescriptorSet(context);
 }
 
 void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 {
+	uint32_t currentMaskIdx = context.currentFrameIdx % MASK_COUNT;
+
 	/* Update data */
 	ShadowUBData shadowUBData;
 	glm::mat4 modelMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));;
 	shadowUBData.invModelView = glm::inverse(context.camera->getViewMatrix() * modelMatrix);
 	shadowUBData.invProjection = glm::inverse(context.camera->getProjection());
+	shadowUBData.previousMVPMatrix = context.camera->getProjection() * context.camera->getPreviousViewMatrix() * modelMatrix;
 
 	float near = context.camera->getNear();
 	float far = context.camera->getFar();
@@ -109,8 +119,8 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 
 	shadowUBData.cascadeTextureSize = glm::uvec4(m_csmManager->getCascadeTextureSize(0), m_csmManager->getCascadeTextureSize(1), m_csmManager->getCascadeTextureSize(2), m_csmManager->getCascadeTextureSize(3));
 
-	shadowUBData.noiseRotation = static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 3.14f * 2.0f;
-	shadowUBData.screenSize = glm::uvec2(m_outputMask->getExtent().width, m_outputMask->getExtent().height);
+	shadowUBData.noiseRotation = m_noiseRotations[context.currentFrameIdx % m_noiseRotations.size()];
+	shadowUBData.screenSize = glm::uvec2(m_outputMasks[currentMaskIdx]->getExtent().width, m_outputMasks[currentMaskIdx]->getExtent().height);
 
 	m_uniformBuffer->transferCPUMemory((void*)&shadowUBData, sizeof(shadowUBData), 0 /* srcOffet */, context.commandBufferIdx);
 
@@ -119,13 +129,14 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
 
-	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline->getPipelineLayout(), 0, 1, 
+		m_descriptorSets[currentMaskIdx]->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
 
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline->getPipeline());
 
 	VkExtent3D dispatchGroups = { 16, 16, 1 };
-	uint32_t groupSizeX = m_outputMask->getExtent().width % dispatchGroups.width != 0 ? m_outputMask->getExtent().width / dispatchGroups.width + 1 : m_outputMask->getExtent().width / dispatchGroups.width;
-	uint32_t groupSizeY = m_outputMask->getExtent().height % dispatchGroups.height != 0 ? m_outputMask->getExtent().height / dispatchGroups.height + 1 : m_outputMask->getExtent().height / dispatchGroups.height;
+	uint32_t groupSizeX = m_outputMasks[currentMaskIdx]->getExtent().width % dispatchGroups.width != 0 ? m_outputMasks[currentMaskIdx]->getExtent().width / dispatchGroups.width + 1 : m_outputMasks[currentMaskIdx]->getExtent().width / dispatchGroups.width;
+	uint32_t groupSizeY = m_outputMasks[currentMaskIdx]->getExtent().height % dispatchGroups.height != 0 ? m_outputMasks[currentMaskIdx]->getExtent().height / dispatchGroups.height + 1 : m_outputMasks[currentMaskIdx]->getExtent().height / dispatchGroups.height;
 	vkCmdDispatch(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), groupSizeX, groupSizeY, dispatchGroups.depth);
 
 	m_commandBuffer->endCommandBuffer(context.commandBufferIdx);
@@ -144,16 +155,19 @@ void ShadowMaskComputePass::submit(const Wolf::SubmitContext& context)
 	}
 }
 
-void ShadowMaskComputePass::createOutputImage(uint32_t width, uint32_t height)
+void ShadowMaskComputePass::createOutputImages(uint32_t width, uint32_t height)
 {
 	CreateImageInfo createImageInfo;
 	createImageInfo.extent = { width, height, 1 };
-	createImageInfo.format = VK_FORMAT_R32_SFLOAT;
+	createImageInfo.format = VK_FORMAT_R32G32_SFLOAT;
 	createImageInfo.mipLevelCount = 1;
 	createImageInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 	createImageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-	m_outputMask.reset(new Image(createImageInfo));
-	m_outputMask->setImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+	for (uint32_t i = 0; i < MASK_COUNT; ++i)
+	{
+		m_outputMasks[i].reset(new Image(createImageInfo));
+		m_outputMasks[i]->setImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+	}
 }
 
 void ShadowMaskComputePass::createPipeline()
@@ -190,12 +204,20 @@ void ShadowMaskComputePass::updateDescriptorSet(const Wolf::InitializationContex
 	descriptorSetGenerator.setSampler(3, *m_shadowMapsSampler.get());
 	descriptorSetGenerator.setCombinedImageSampler(4, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_noiseImage->getDefaultImageView(), *m_noiseSampler.get());
 
-	DescriptorSetGenerator::ImageDescription outputImageDesc;
-	outputImageDesc.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-	outputImageDesc.imageView = m_outputMask->getDefaultImageView();
-	descriptorSetGenerator.setImage(5, outputImageDesc);
+	for (uint32_t i = 0; i < MASK_COUNT; ++i)
+	{
+		DescriptorSetGenerator::ImageDescription previousOutputImageDesc;
+		previousOutputImageDesc.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		previousOutputImageDesc.imageView = m_outputMasks[(i + 1) % MASK_COUNT]->getDefaultImageView();
+		descriptorSetGenerator.setImage(5, previousOutputImageDesc);
 
-	m_descriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
+		DescriptorSetGenerator::ImageDescription outputImageDesc;
+		outputImageDesc.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		outputImageDesc.imageView = m_outputMasks[i]->getDefaultImageView();
+		descriptorSetGenerator.setImage(6, outputImageDesc);
+
+		m_descriptorSets[i]->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
+	}
 }
 
 float ShadowMaskComputePass::jitter()

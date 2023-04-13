@@ -16,6 +16,8 @@ class DepthPass;
 class ShadowMaskComputePass : public Wolf::CommandRecordBase
 {
 public:
+	static constexpr uint32_t MASK_COUNT = 2;
+
 	ShadowMaskComputePass(DepthPass* preDepthPass, CascadedShadowMapping* csmManager);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
@@ -23,10 +25,10 @@ public:
 	void record(const Wolf::RecordContext& context) override;
 	void submit(const Wolf::SubmitContext& context) override;
 
-	Wolf::Image* getOutput() { return m_outputMask.get(); }
+	Wolf::Image* getOutput(uint32_t frameIdx) { return m_outputMasks[frameIdx % MASK_COUNT].get(); }
 
 private:
-	void createOutputImage(uint32_t width, uint32_t height);
+	void createOutputImages(uint32_t width, uint32_t height);
 	void createPipeline();
 	void updateDescriptorSet(const Wolf::InitializationContext& context);
 
@@ -36,15 +38,16 @@ private:
 	/* Pipeline */
 	std::unique_ptr<Wolf::ShaderParser> m_computeShaderParser;
 	std::unique_ptr<Wolf::Pipeline> m_pipeline;
-	std::unique_ptr<Wolf::Image> m_outputMask;
+	std::array<std::unique_ptr<Wolf::Image>, MASK_COUNT> m_outputMasks;
 
 	/* Resources */
 	Wolf::DescriptorSetLayoutGenerator m_descriptorSetLayoutGenerator;
 	std::unique_ptr<Wolf::DescriptorSetLayout> m_descriptorSetLayout;
-	std::unique_ptr<Wolf::DescriptorSet> m_descriptorSet;
+	std::array<std::unique_ptr<Wolf::DescriptorSet>, MASK_COUNT> m_descriptorSets;
 
 	static constexpr uint32_t NOISE_TEXTURE_SIZE_PER_SIDE = 128;
 	static constexpr uint32_t NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE = 4;
+	std::array<float, 16> m_noiseRotations;
 	DepthPass* m_preDepthPass;
 	CascadedShadowMapping* m_csmManager;
 	struct ShadowUBData
@@ -54,6 +57,8 @@ private:
 		glm::mat4 invProjection;
 
 		glm::vec4 projectionParams;
+
+		glm::mat4 previousMVPMatrix;
 
 		glm::uvec2 screenSize;
 		glm::vec2 padding;

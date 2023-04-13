@@ -79,6 +79,10 @@ void CascadeDepthPass::createPipeline()
 	Wolf::Vertex3D::getBindingDescription(bindingDescriptions[0], 0);
 	pipelineCreateInfo.vertexInputBindingDescriptions = bindingDescriptions;
 
+	// Raster
+	pipelineCreateInfo.depthBiasConstantFactor = 4.0f;
+	pipelineCreateInfo.depthBiasSlopeFactor = 2.5f;
+
 	// Resources
 	std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { m_descriptorSetLayout };
 	pipelineCreateInfo.descriptorSetLayouts = descriptorSetLayouts;
@@ -100,7 +104,7 @@ CascadedShadowMapping::CascadedShadowMapping(const Wolf::Mesh* sponzaMesh)
 void CascadedShadowMapping::initializeResources(const Wolf::InitializationContext& context)
 {
 	m_commandBuffer.reset(new CommandBuffer(QueueType::GRAPHIC, false /* isTransient */));
-	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
+	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT));
 
 	DescriptorSetLayoutGenerator descriptorSetLayoutGenerator;
 	descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT, 0);
@@ -147,14 +151,14 @@ void CascadedShadowMapping::record(const Wolf::RecordContext& context)
 		const float ar = context.swapchainImage[0].getExtent().height / static_cast<float>(context.swapchainImage[0].getExtent().width);
 		const float cosHalfHFOV = static_cast<float>(glm::cos((context.camera->getFOV() * (1.0f / ar)) / 2.0f));
 		const float b = endCascade / cosHalfHFOV;
-		radius = glm::sqrt(b * b + (startCascade + radius) * (startCascade + radius) - 2.0f * b * startCascade * cosHalfHFOV);
+		radius = glm::sqrt(b * b + (startCascade + radius) * (startCascade + radius) - 2.0f * b * startCascade * cosHalfHFOV) * 0.75f;
 
 		const float texelPerUnit = static_cast<float>(m_cascadeTextureSize[cascade]) / (radius * 2.0f);
 		glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(texelPerUnit));
 		glm::mat4 lookAt = scaleMat * glm::lookAt(glm::vec3(0.0f), -gameContext->sunDirection, glm::vec3(0.0f, 1.0f, 0.0f));
 		glm::mat4 lookAtInv = glm::inverse(lookAt);
 
-		glm::vec3 frustumCenter = context.camera->getPosition() + context.camera->getOrientation() * startCascade + context.camera->getOrientation() * (endCascade / 2.0f);
+		glm::vec3 frustumCenter = context.camera->getPosition() + (context.camera->getOrientation() * startCascade + context.camera->getOrientation() * endCascade) / 2.0f;
 		frustumCenter = lookAt * glm::vec4(frustumCenter, 1.0f);
 		frustumCenter.x = static_cast<float>(floor(frustumCenter.x));
 		frustumCenter.y = static_cast<float>(floor(frustumCenter.y));

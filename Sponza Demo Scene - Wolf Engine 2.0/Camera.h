@@ -23,6 +23,7 @@ public:
 	void update(GLFWwindow* window) override;
 
 	glm::mat4 getViewMatrix() const override;
+	glm::mat4 getPreviousViewMatrix() const override;
 	glm::mat4 getProjection() const override;
 	glm::vec3 getPosition() const override;
 	float getNear() const override { return m_near; }
@@ -64,5 +65,6 @@ private:
 	float m_far = 50.0f;
 	float m_radFOV = glm::radians(45.0f);
 
-	glm::vec3 previousPos;
+	glm::mat4 m_viewMatrix;
+	glm::mat4 m_previousViewMatrix;
 };

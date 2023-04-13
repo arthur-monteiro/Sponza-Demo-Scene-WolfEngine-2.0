@@ -21,7 +21,7 @@ void DepthPass::initializeResources(const Wolf::InitializationContext& context)
 	m_vertexShaderParser.reset(new ShaderParser("Shaders/shader.vert"));
 
 	m_commandBuffer.reset(new CommandBuffer(QueueType::GRAPHIC, false /* isTransient */));
-	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
+	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT));
 
 	DescriptorSetLayoutGenerator descriptorSetLayoutGenerator;
 	descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT, 0);

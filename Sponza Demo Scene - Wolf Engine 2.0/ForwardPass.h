@@ -19,8 +19,9 @@
 #include <Sampler.h>
 #include <ShaderParser.h>
 
+#include "ShadowMaskComputePass.h"
+
 class DepthPass;
-class ShadowMaskComputePass;
 
 class ForwardPass : public Wolf::CommandRecordBase
 {
@@ -81,7 +82,7 @@ private:
 	std::unique_ptr<Wolf::Buffer> m_lightUniformBuffer;
 
 	std::unique_ptr<Wolf::DescriptorSetLayout> m_descriptorSetLayout;
-	std::unique_ptr<Wolf::DescriptorSet> m_descriptorSet;
+	std::array<std::unique_ptr<Wolf::DescriptorSet>, ShadowMaskComputePass::MASK_COUNT> m_descriptorSets;
 
 	/* UI resources */
 	Wolf::DescriptorSetLayoutGenerator m_userInterfaceDescriptorSetLayoutGenerator;

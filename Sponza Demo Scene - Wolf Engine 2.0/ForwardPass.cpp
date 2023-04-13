@@ -83,13 +83,17 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 		}
 		descriptorSetGenerator.setImages(2, sponzaImageDescriptions);
 		DescriptorSetGenerator::ImageDescription shadowMaskDesc;
-		shadowMaskDesc.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-		shadowMaskDesc.imageView = m_shadowMaskComputePass->getOutput()->getDefaultImageView();
-		descriptorSetGenerator.setImage(3, shadowMaskDesc);
 		descriptorSetGenerator.setBuffer(4, *m_lightUniformBuffer.get());
 
-		m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
-		m_descriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
+		for (uint32_t i = 0; i < ShadowMaskComputePass::MASK_COUNT; ++i)
+		{
+			shadowMaskDesc.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+			shadowMaskDesc.imageView = m_shadowMaskComputePass->getOutput(i)->getDefaultImageView();
+			descriptorSetGenerator.setImage(3, shadowMaskDesc);
+
+			m_descriptorSets[i].reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
+			m_descriptorSets[i]->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
+		}
 	}
 
 	// UI resources
@@ -151,6 +155,7 @@ void ForwardPass::resize(const Wolf::InitializationContext& context)
 void ForwardPass::record(const Wolf::RecordContext& context)
 {
 	const GameContext* gameContext = (const GameContext*)context.gameContext;
+	uint32_t currentMaskIdx = context.currentFrameIdx % ShadowMaskComputePass::MASK_COUNT;
 
 	/* Update */
 	MatricesUBData mvp;
@@ -182,7 +187,7 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipeline());
 
-	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSets[currentMaskIdx]->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
 
 	m_sponzaMesh->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 

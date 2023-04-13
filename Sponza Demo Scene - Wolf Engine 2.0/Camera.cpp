@@ -55,16 +55,18 @@ void Camera::update(GLFWwindow* window)
 		m_target = m_position + m_orientation;
 	}
 
-	/*if (previousPos != m_position)
-		std::cout << "x : " << m_position.x << " y : " << m_position.y << " z : " << m_position.z << std::endl;*/
-	previousPos = m_position;
+	m_previousViewMatrix = m_viewMatrix;
+	m_viewMatrix = glm::lookAt(m_position, m_target, m_verticalAxis);
 }
 
 glm::mat4 Camera::getViewMatrix() const
 {
-	return glm::lookAt(m_position, m_target, m_verticalAxis);
+	return m_viewMatrix;
+}
 
-	//return glm::lookAt(m_position, glm::normalize(m_position + forceOrientation), m_verticalAxis);
+glm::mat4 Camera::getPreviousViewMatrix() const
+{
+	return m_previousViewMatrix;
 }
 
 glm::vec3 Camera::getPosition() const

@@ -137,6 +137,8 @@
     <ClCompile Include="ForwardPass.cpp" />
     <ClCompile Include="LoadingScreenUniquePass.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="RayTracedShadowsPass.cpp" />
+    <ClCompile Include="ShadowMaskBasePass.cpp" />
     <ClCompile Include="ShadowMaskComputePass.cpp" />
     <ClCompile Include="SponzaModel.cpp" />
     <ClCompile Include="SponzaScene.cpp" />
@@ -149,6 +151,8 @@
     <ClInclude Include="ForwardPass.h" />
     <ClInclude Include="GameContext.h" />
     <ClInclude Include="LoadingScreenUniquePass.h" />
+    <ClInclude Include="RayTracedShadowsPass.h" />
+    <ClInclude Include="ShadowMaskBasePass.h" />
     <ClInclude Include="ShadowMaskComputePass.h" />
     <ClInclude Include="SponzaModel.h" />
     <ClInclude Include="SponzaScene.h" />

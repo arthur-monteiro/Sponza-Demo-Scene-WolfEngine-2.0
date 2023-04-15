@@ -51,11 +51,11 @@ void ShadowMaskComputePass::initializeResources(const Wolf::InitializationContex
 			{
 				for (int u = 0; u < 4; u++)
 				{
-					float x = ((float)u + 0.5f + jitter()) / (float)NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE;
-					float y = ((float)v + 0.5f + jitter()) / (float)NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE;
+					float x = (static_cast<float>(u) + 0.5f + jitter()) / static_cast<float>(NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE);
+					float y = (static_cast<float>(v) + 0.5f + jitter()) / static_cast<float>(NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE);
 
-					uint32_t patternIdx = u + v * NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE;
-					uint32_t idx = texX + texY * NOISE_TEXTURE_SIZE_PER_SIDE + patternIdx * (NOISE_TEXTURE_SIZE_PER_SIDE * NOISE_TEXTURE_SIZE_PER_SIDE);
+					const uint32_t patternIdx = u + v * NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE;
+					const uint32_t idx = texX + texY * NOISE_TEXTURE_SIZE_PER_SIDE + patternIdx * (NOISE_TEXTURE_SIZE_PER_SIDE * NOISE_TEXTURE_SIZE_PER_SIDE);
 
 					constexpr float PI = 3.14159265358979323846264338327950288f;
 					noiseData[2 * idx] = sqrtf(y) * cosf(2.0f * PI * x);
@@ -73,18 +73,18 @@ void ShadowMaskComputePass::initializeResources(const Wolf::InitializationContex
 
 	for(uint32_t i = 0; i < MASK_COUNT; ++i)
 		m_descriptorSets[i].reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
-	updateDescriptorSet(context);
+	updateDescriptorSet();
 
-	for (uint32_t i = 0; i < m_noiseRotations.size(); ++i)
+	for (float& noiseRotation : m_noiseRotations)
 	{
-		m_noiseRotations[i] = static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 3.14f * 2.0f;
+		noiseRotation = static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 3.14f * 2.0f;
 	}
 }
 
 void ShadowMaskComputePass::resize(const Wolf::InitializationContext& context)
 {
 	createOutputImages(context.swapChainWidth, context.swapChainHeight);
-	updateDescriptorSet(context);
+	updateDescriptorSet();
 }
 
 void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
@@ -98,8 +98,8 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 	shadowUBData.invProjection = glm::inverse(context.camera->getProjection());
 	shadowUBData.previousMVPMatrix = context.camera->getProjection() * context.camera->getPreviousViewMatrix() * modelMatrix;
 
-	float near = context.camera->getNear();
-	float far = context.camera->getFar();
+	const float near = context.camera->getNear();
+	const float far = context.camera->getFar();
 	shadowUBData.projectionParams.x = far / (far - near);
 	shadowUBData.projectionParams.y = (-far * near) / (far - near);
 
@@ -109,7 +109,7 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 		m_csmManager->getCascadeMatrix(cascadeIdx, shadowUBData.cascadeMatrices[cascadeIdx]);
 	}
 
-	glm::vec2 referenceScale = glm::vec2(shadowUBData.cascadeMatrices[0][0][0], shadowUBData.cascadeMatrices[0][1][1]);
+	const glm::vec2 referenceScale = glm::vec2(shadowUBData.cascadeMatrices[0][0][0], shadowUBData.cascadeMatrices[0][1][1]);
 	for (uint32_t cascadeIdx = 0; cascadeIdx < CascadedShadowMapping::CASCADE_COUNT / 2; ++cascadeIdx)
 	{
 		glm::vec2 cascadeScale1 = glm::vec2(shadowUBData.cascadeMatrices[2 * cascadeIdx][0][0], shadowUBData.cascadeMatrices[2 * cascadeIdx][1][1]);
@@ -134,9 +134,9 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline->getPipeline());
 
-	VkExtent3D dispatchGroups = { 16, 16, 1 };
-	uint32_t groupSizeX = m_outputMasks[currentMaskIdx]->getExtent().width % dispatchGroups.width != 0 ? m_outputMasks[currentMaskIdx]->getExtent().width / dispatchGroups.width + 1 : m_outputMasks[currentMaskIdx]->getExtent().width / dispatchGroups.width;
-	uint32_t groupSizeY = m_outputMasks[currentMaskIdx]->getExtent().height % dispatchGroups.height != 0 ? m_outputMasks[currentMaskIdx]->getExtent().height / dispatchGroups.height + 1 : m_outputMasks[currentMaskIdx]->getExtent().height / dispatchGroups.height;
+	constexpr VkExtent3D dispatchGroups = { 16, 16, 1 };
+	const uint32_t groupSizeX = m_outputMasks[currentMaskIdx]->getExtent().width % dispatchGroups.width != 0 ? m_outputMasks[currentMaskIdx]->getExtent().width / dispatchGroups.width + 1 : m_outputMasks[currentMaskIdx]->getExtent().width / dispatchGroups.width;
+	const uint32_t groupSizeY = m_outputMasks[currentMaskIdx]->getExtent().height % dispatchGroups.height != 0 ? m_outputMasks[currentMaskIdx]->getExtent().height / dispatchGroups.height + 1 : m_outputMasks[currentMaskIdx]->getExtent().height / dispatchGroups.height;
 	vkCmdDispatch(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), groupSizeX, groupSizeY, dispatchGroups.depth);
 
 	m_commandBuffer->endCommandBuffer(context.commandBufferIdx);
@@ -144,8 +144,8 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 
 void ShadowMaskComputePass::submit(const Wolf::SubmitContext& context)
 {
-	std::vector<const Semaphore*> waitSemaphores{ m_csmManager->getSemaphore(), m_preDepthPass->getSemaphore() };
-	std::vector<VkSemaphore> signalSemaphores{ m_semaphore->getSemaphore() };
+	const std::vector waitSemaphores{ m_csmManager->getSemaphore(), m_preDepthPass->getSemaphore() };
+	const std::vector signalSemaphores{ m_semaphore->getSemaphore() };
 	m_commandBuffer->submit(context.commandBufferIdx, waitSemaphores, signalSemaphores, VK_NULL_HANDLE);
 
 	if (m_computeShaderParser->compileIfFileHasBeenModified())
@@ -185,7 +185,7 @@ void ShadowMaskComputePass::createPipeline()
 	m_pipeline.reset(new Pipeline(computeShaderCreateInfo, descriptorSetLayouts));
 }
 
-void ShadowMaskComputePass::updateDescriptorSet(const Wolf::InitializationContext& context)
+void ShadowMaskComputePass::updateDescriptorSet() const
 {
 	DescriptorSetGenerator descriptorSetGenerator(m_descriptorSetLayoutGenerator.getDescriptorLayouts());
 
@@ -193,7 +193,7 @@ void ShadowMaskComputePass::updateDescriptorSet(const Wolf::InitializationContex
 	preDepthImageDesc.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	preDepthImageDesc.imageView = m_preDepthPass->getOutput()->getDefaultImageView();
 	descriptorSetGenerator.setImage(0, preDepthImageDesc);
-	descriptorSetGenerator.setBuffer(1, *m_uniformBuffer.get());
+	descriptorSetGenerator.setBuffer(1, *m_uniformBuffer);
 	std::vector<DescriptorSetGenerator::ImageDescription> shadowMapImageDescriptions(CascadedShadowMapping::CASCADE_COUNT);
 	for (uint32_t i = 0; i < CascadedShadowMapping::CASCADE_COUNT; ++i)
 	{
@@ -201,7 +201,7 @@ void ShadowMaskComputePass::updateDescriptorSet(const Wolf::InitializationContex
 		shadowMapImageDescriptions[i].imageView = m_csmManager->getShadowMap(i)->getDefaultImageView();
 	}
 	descriptorSetGenerator.setImages(2, shadowMapImageDescriptions);
-	descriptorSetGenerator.setSampler(3, *m_shadowMapsSampler.get());
+	descriptorSetGenerator.setSampler(3, *m_shadowMapsSampler);
 	descriptorSetGenerator.setCombinedImageSampler(4, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_noiseImage->getDefaultImageView(), *m_noiseSampler.get());
 
 	for (uint32_t i = 0; i < MASK_COUNT; ++i)
@@ -223,6 +223,6 @@ void ShadowMaskComputePass::updateDescriptorSet(const Wolf::InitializationContex
 float ShadowMaskComputePass::jitter()
 {
 	static std::default_random_engine generator;
-	static std::uniform_real_distribution<float> distrib(-0.5f, 0.5f);
+	static std::uniform_real_distribution distrib(-0.5f, 0.5f);
 	return distrib(generator);
 }

@@ -6,7 +6,6 @@
 #include <vector>
 
 #include <Buffer.h>
-#include <CommandBuffer.h>
 #include <CommandRecordBase.h>
 #include <DescriptorSet.h>
 #include <DescriptorSetLayout.h>
@@ -19,34 +18,35 @@
 #include <Sampler.h>
 #include <ShaderParser.h>
 
-#include "ShadowMaskComputePass.h"
+#include "ShadowMaskBasePass.h"
 
 class DepthPass;
+class SponzaModel;
 
 class ForwardPass : public Wolf::CommandRecordBase
 {
 public:
-	ForwardPass(const Wolf::Mesh* sponzaMesh, std::vector<Wolf::Image*> images, DepthPass* preDepthPass, ShadowMaskComputePass* shadowMaskComputePass);
+	ForwardPass(const SponzaModel* sponzaModel, std::vector<Wolf::Image*> images, DepthPass* preDepthPass, ShadowMaskBasePass* shadowMaskPass);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
 	void record(const Wolf::RecordContext& context) override;
 	void submit(const Wolf::SubmitContext& context) override;
 
-	const Wolf::Semaphore* getSemaphore() const { return m_signalSemaphore.get(); }
+	void setShadowMaskPass(ShadowMaskBasePass* shadowMaskPass);
 
 private:
 	void createPipelines(uint32_t width, uint32_t height);
+	void createDescriptorSets();
 
 private:
 	std::unique_ptr<Wolf::RenderPass> m_renderPass;
 	DepthPass* m_preDepthPass;
 
 	std::vector<std::unique_ptr<Wolf::Framebuffer>> m_frameBuffers;
-
-	std::unique_ptr<Wolf::Semaphore> m_signalSemaphore;
+	
 	const Wolf::Semaphore* m_preDepthPassSemaphore;
-	ShadowMaskComputePass* m_shadowMaskComputePass;
+	ShadowMaskBasePass* m_shadowMaskPass;
 
 	/* Pipeline */
 	std::unique_ptr<Wolf::ShaderParser> m_vertexShaderParser;
@@ -61,7 +61,7 @@ private:
 	uint32_t m_swapChainHeight;
 
 	/* Resources*/
-	const Wolf::Mesh* m_sponzaMesh;
+	const SponzaModel* m_sponzaModel;
 	std::vector<Wolf::Image*> m_sponzaImages;
 	std::unique_ptr<Wolf::Sampler> m_sampler;
 	struct MatricesUBData
@@ -82,7 +82,8 @@ private:
 	std::unique_ptr<Wolf::Buffer> m_lightUniformBuffer;
 
 	std::unique_ptr<Wolf::DescriptorSetLayout> m_descriptorSetLayout;
-	std::array<std::unique_ptr<Wolf::DescriptorSet>, ShadowMaskComputePass::MASK_COUNT> m_descriptorSets;
+	Wolf::DescriptorSetLayoutGenerator m_descriptorSetLayoutGenerator;
+	std::array<std::unique_ptr<Wolf::DescriptorSet>, ShadowMaskBasePass::MASK_COUNT> m_descriptorSets;
 
 	/* UI resources */
 	Wolf::DescriptorSetLayoutGenerator m_userInterfaceDescriptorSetLayoutGenerator;

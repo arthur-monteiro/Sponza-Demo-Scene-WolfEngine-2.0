@@ -1,0 +1,40 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_samplerless_texture_functions : require
+
+layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
+layout(binding = 1, set = 0, rg32f) uniform image2D image;
+layout(binding = 2, set = 0) uniform texture2D depthImage;
+layout(binding = 3, set = 0) uniform UniformBuffer
+{
+    mat4 invModelView;
+    mat4 invProjection;
+	vec4 projectionParams;
+    vec4 sunDirection;
+} ub;
+layout(location = 0) rayPayloadEXT bool isShadowed;
+
+void main() 
+{
+    const vec2 pixelPos = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+    const vec2 inUV = pixelPos / vec2(gl_LaunchSizeEXT.xy);
+    vec2 d = inUV * 2.0 - 1.0;
+
+    vec4 viewRay = ub.invProjection * vec4(d.x, d.y, 1.0, 1.0);
+    float depth = texelFetch(depthImage, ivec2(gl_LaunchIDEXT.xy), 0).r;
+    float linearDepth = ub.projectionParams.y / (depth - ub.projectionParams.x);
+    vec3 viewPos = viewRay.xyz * linearDepth;
+	vec4 rawPos = ub.invModelView * vec4(viewPos, 1.0);
+
+    vec4 origin = rawPos;
+
+    uint rayFlags = gl_RayFlagsOpaqueEXT;
+    uint cullMask = 0xff;
+    float tmin = 0.001;
+    float tmax = 10000.0;
+
+    isShadowed = true;
+    traceRayEXT(topLevelAS, rayFlags, cullMask, 0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/, origin.xyz, tmin, ub.sunDirection.xyz, tmax, 0 /*payload*/);
+
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(isShadowed ? 0.0 : 1.0, 0.0, 0.0, 0.0));
+}

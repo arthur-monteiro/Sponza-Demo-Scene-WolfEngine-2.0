@@ -10,14 +10,13 @@
 #include <ShaderParser.h>
 
 #include "CascadedShadowMapping.h"
+#include "ShadowMaskBasePass.h"
 
 class DepthPass;
 
-class ShadowMaskComputePass : public Wolf::CommandRecordBase
+class ShadowMaskComputePass : public Wolf::CommandRecordBase, public ShadowMaskBasePass
 {
 public:
-	static constexpr uint32_t MASK_COUNT = 2;
-
 	ShadowMaskComputePass(DepthPass* preDepthPass, CascadedShadowMapping* csmManager);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
@@ -25,14 +24,15 @@ public:
 	void record(const Wolf::RecordContext& context) override;
 	void submit(const Wolf::SubmitContext& context) override;
 
-	Wolf::Image* getOutput(uint32_t frameIdx) { return m_outputMasks[frameIdx % MASK_COUNT].get(); }
+	Wolf::Image* getOutput(uint32_t frameIdx) override { return m_outputMasks[frameIdx % MASK_COUNT].get(); }
+	const Wolf::Semaphore* getSemaphore() const override { return Wolf::CommandRecordBase::getSemaphore(); }
 
 private:
 	void createOutputImages(uint32_t width, uint32_t height);
 	void createPipeline();
-	void updateDescriptorSet(const Wolf::InitializationContext& context);
+	void updateDescriptorSet() const;
 
-	float jitter();
+	static float jitter();
 
 private:
 	/* Pipeline */

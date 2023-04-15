@@ -17,10 +17,12 @@
 #include <Sampler.h>
 #include <ShaderParser.h>
 
+class SponzaModel;
+
 class DepthPass : public Wolf::CommandRecordBase, public Wolf::DepthPassBase
 {
 public:
-	DepthPass(const Wolf::Mesh* sponzaMesh);
+	DepthPass(const SponzaModel* sponzaModel);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
@@ -48,7 +50,7 @@ private:
 	uint32_t m_swapChainHeight;
 
 	/* Resources*/
-	const Wolf::Mesh* m_sponzaMesh;
+	const SponzaModel* m_sponzaModel;
 	struct UBData
 	{
 		glm::mat4 model;

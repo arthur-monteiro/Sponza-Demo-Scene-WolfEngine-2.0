@@ -11,7 +11,7 @@ public:
 	SponzaModel(std::mutex* vulkanQueueLock, const glm::mat4& transform, bool buildAccelerationStructures);
 
 	const Wolf::Mesh* getMesh() const { return m_sponzaLoader->getMesh(); }
-	const void getImages(std::vector<Wolf::Image*>& images) { m_sponzaLoader->getImages(images); }
+	void getImages(std::vector<Wolf::Image*>& images) const { m_sponzaLoader->getImages(images); }
 	const glm::mat4& getTransform() const { return m_transform; }
 	const Wolf::TopLevelAccelerationStructure& getTLAS() const { return *m_tlas.get(); }
 

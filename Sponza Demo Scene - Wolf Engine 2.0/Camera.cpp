@@ -14,7 +14,13 @@ Camera::Camera(glm::vec3 position, glm::vec3 target, glm::vec3 verticalAxis, flo
 
 void Camera::update(GLFWwindow* window)
 {
-	if (m_oldMousePosX < 0 || m_fixed)
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS && m_oldEscapeState == GLFW_RELEASE)
+	{
+		m_locked = !m_locked;
+	}
+	m_oldEscapeState = glfwGetKey(window, GLFW_KEY_ESCAPE);
+
+	if (m_oldMousePosX < 0 || m_locked)
 	{
 		glfwGetCursorPos(window, &m_oldMousePosX, &m_oldMousePosY);
 		return;

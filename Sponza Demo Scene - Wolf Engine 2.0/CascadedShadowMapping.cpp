@@ -137,7 +137,7 @@ void CascadedShadowMapping::resize(const Wolf::InitializationContext& context)
 
 void CascadedShadowMapping::record(const Wolf::RecordContext& context)
 {
-	const GameContext* gameContext = (const GameContext*)context.gameContext;
+	const GameContext* gameContext = static_cast<const GameContext*>(context.gameContext);
 
 	/* Update */
 	float lastSplitDist = context.camera->getNear();
@@ -149,7 +149,7 @@ void CascadedShadowMapping::record(const Wolf::RecordContext& context)
 		float radius = (endCascade - startCascade) / 2.0f;
 
 		const float ar = context.swapchainImage[0].getExtent().height / static_cast<float>(context.swapchainImage[0].getExtent().width);
-		const float cosHalfHFOV = static_cast<float>(glm::cos((context.camera->getFOV() * (1.0f / ar)) / 2.0f));
+		const float cosHalfHFOV = glm::cos(context.camera->getFOV() * (1.0f / ar) / 2.0f);
 		const float b = endCascade / cosHalfHFOV;
 		radius = glm::sqrt(b * b + (startCascade + radius) * (startCascade + radius) - 2.0f * b * startCascade * cosHalfHFOV) * 0.75f;
 
@@ -160,8 +160,8 @@ void CascadedShadowMapping::record(const Wolf::RecordContext& context)
 
 		glm::vec3 frustumCenter = context.camera->getPosition() + (context.camera->getOrientation() * startCascade + context.camera->getOrientation() * endCascade) / 2.0f;
 		frustumCenter = lookAt * glm::vec4(frustumCenter, 1.0f);
-		frustumCenter.x = static_cast<float>(floor(frustumCenter.x));
-		frustumCenter.y = static_cast<float>(floor(frustumCenter.y));
+		frustumCenter.x = floor(frustumCenter.x);
+		frustumCenter.y = floor(frustumCenter.y);
 		frustumCenter = lookAtInv * glm::vec4(frustumCenter, 1.0f);
 
 		glm::mat4 lightViewMatrix = glm::lookAt(frustumCenter - 50.0f * glm::normalize(gameContext->sunDirection), frustumCenter, glm::vec3(0.0f, 1.0f, 0.0f));

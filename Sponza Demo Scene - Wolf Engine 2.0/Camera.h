@@ -34,7 +34,7 @@ public:
 
 	void setPosition(glm::vec3 position);
 	void setTarget(glm::vec3 target);
-	void setFixed(bool value) { m_fixed = value; }
+	void setFixed(bool value) { m_locked = value; }
 	void setAspect(float aspect) { m_aspect = aspect; }
 
 private:
@@ -58,7 +58,7 @@ private:
 	double m_oldMousePosY = -1;
 
 	const float OFFSET_ANGLES = 0.01f;
-	bool m_fixed = false;
+	bool m_locked = false;
 
 	float m_aspect;
 	float m_near = 0.1f;
@@ -67,4 +67,6 @@ private:
 
 	glm::mat4 m_viewMatrix;
 	glm::mat4 m_previousViewMatrix;
+
+	int m_oldEscapeState = 0;
 };

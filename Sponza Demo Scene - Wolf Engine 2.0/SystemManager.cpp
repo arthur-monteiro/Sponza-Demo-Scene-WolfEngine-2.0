@@ -27,7 +27,7 @@ void SystemManager::run()
 		if (m_gameState == GAME_STATE::LOADING)
 		{
 			m_mutex.lock();
-			std::vector<Wolf::CommandRecordBase*> passes(1);
+			std::vector<CommandRecordBase*> passes(1);
 			passes[0] = m_loadingScreenUniquePass.get();
 
 			m_wolfInstance->frame(passes, m_loadingScreenUniquePass->getSemaphore());
@@ -37,6 +37,10 @@ void SystemManager::run()
 		}
 		else if (m_gameState == GAME_STATE::RUNNING)
 		{
+			const uint32_t contextId = m_wolfInstance->getCurrentFrame() % g_configuration->getMaxCachedFrames();
+			GameContext& gameContext = m_gameContexts[contextId];
+			gameContext.sunDirection = glm::vec3(glm::sin(m_sunPhi) * glm::cos(m_sunTheta), glm::cos(m_sunTheta), glm::sin(m_sunPhi) * glm::sin(m_sunTheta));
+
 			m_sponzaScene->update(m_wolfInstance.get());
 			m_sponzaScene->frame(m_wolfInstance.get());
 		}
@@ -61,15 +65,15 @@ void SystemManager::createWolfInstance()
 	WolfInstanceCreateInfo wolfInstanceCreateInfo;
 	wolfInstanceCreateInfo.configFilename = "config/config.ini";
 	wolfInstanceCreateInfo.debugCallback = debugCallback;
-
-	const TextFileReader UIHtmlReader("UI/UI.html");
-	wolfInstanceCreateInfo.htmlStringUI = UIHtmlReader.getFileContent().c_str();
+	wolfInstanceCreateInfo.htmlURL = "UI/UI.html";
 
 	m_wolfInstance.reset(new WolfEngine(wolfInstanceCreateInfo));
 
 	ultralight::JSObject jsObject;
 	m_wolfInstance->getUserInterfaceJSObject(jsObject);
 	jsObject["getFrameRate"] = static_cast<ultralight::JSCallbackWithRetval>(std::bind(&SystemManager::getFrameRate, this, std::placeholders::_1, std::placeholders::_2));
+	jsObject["setSunTheta"] = std::bind(&SystemManager::setSunTheta, this, std::placeholders::_1, std::placeholders::_2);
+	jsObject["setSunPhi"] = std::bind(&SystemManager::setSunPhi, this, std::placeholders::_1, std::placeholders::_2);
 
 	m_gameContexts.reserve(g_configuration->getMaxCachedFrames());
 	std::vector<void*> contextPtrs(g_configuration->getMaxCachedFrames());
@@ -113,4 +117,14 @@ ultralight::JSValue SystemManager::getFrameRate(const ultralight::JSObject& this
 {
 	const std::string fpsStr = "FPS: " + std::to_string(m_stableFPS);
 	return {fpsStr.c_str()};
+}
+
+void SystemManager::setSunTheta(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args)
+{
+	m_sunTheta = args[0].ToNumber() * 2.0 * M_PI;
+}
+
+void SystemManager::setSunPhi(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args)
+{
+	m_sunPhi = args[0].ToNumber() * M_PI;
 }

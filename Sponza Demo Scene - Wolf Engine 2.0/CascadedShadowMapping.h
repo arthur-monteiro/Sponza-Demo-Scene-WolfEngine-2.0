@@ -26,7 +26,7 @@ public:
 		const Wolf::ShaderParser* vertexShaderParser, const Wolf::DescriptorSetLayoutGenerator& descriptorSetLayoutGenerator);
 	CascadeDepthPass(const CascadeDepthPass&) = delete;
 
-	void getMVP(glm::mat4& output) { output = m_mvpData.mvp; }
+	void getMVP(glm::mat4& output) const { output = m_mvpData.mvp; }
 	void setMVP(const glm::mat4& mvp);
 	void shaderChanged();
 
@@ -72,10 +72,10 @@ public:
 	void record(const Wolf::RecordContext& context) override;
 	void submit(const Wolf::SubmitContext& context) override;
 
-	Wolf::Image* getShadowMap(uint32_t cascadeIdx) { return m_cascadeDepthPasses[cascadeIdx]->getOutput(); }
+	Wolf::Image* getShadowMap(uint32_t cascadeIdx) const { return m_cascadeDepthPasses[cascadeIdx]->getOutput(); }
 	float getCascadeSplit(uint32_t cascadeIdx) const { return m_cascadeSplits[cascadeIdx]; }
-	void getCascadeMatrix(uint32_t cascadeIdx, glm::mat4& output) { m_cascadeDepthPasses[cascadeIdx]->getMVP(output); }
-	uint32_t getCascadeTextureSize(uint32_t cascadeIdx) { return m_cascadeTextureSize[cascadeIdx]; }
+	void getCascadeMatrix(uint32_t cascadeIdx, glm::mat4& output) const { m_cascadeDepthPasses[cascadeIdx]->getMVP(output); }
+	uint32_t getCascadeTextureSize(uint32_t cascadeIdx) const { return m_cascadeTextureSize[cascadeIdx]; }
 
 private:
 	/* Pipeline */

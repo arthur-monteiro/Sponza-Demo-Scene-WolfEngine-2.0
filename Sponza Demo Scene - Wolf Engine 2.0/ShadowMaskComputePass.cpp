@@ -109,11 +109,11 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 		m_csmManager->getCascadeMatrix(cascadeIdx, shadowUBData.cascadeMatrices[cascadeIdx]);
 	}
 
-	const glm::vec2 referenceScale = glm::vec2(shadowUBData.cascadeMatrices[0][0][0], shadowUBData.cascadeMatrices[0][1][1]);
+	const glm::vec2 referenceScale = glm::vec2(glm::length(shadowUBData.cascadeMatrices[0][0]), glm::length(shadowUBData.cascadeMatrices[0][1]));
 	for (uint32_t cascadeIdx = 0; cascadeIdx < CascadedShadowMapping::CASCADE_COUNT / 2; ++cascadeIdx)
 	{
-		glm::vec2 cascadeScale1 = glm::vec2(shadowUBData.cascadeMatrices[2 * cascadeIdx][0][0], shadowUBData.cascadeMatrices[2 * cascadeIdx][1][1]);
-		glm::vec2 cascadeScale2 = glm::vec2(shadowUBData.cascadeMatrices[2 * cascadeIdx + 1][0][0], shadowUBData.cascadeMatrices[2 * cascadeIdx + 1][1][1]);
+		glm::vec2 cascadeScale1 = glm::vec2(glm::length(shadowUBData.cascadeMatrices[2 * cascadeIdx][0]), glm::length(shadowUBData.cascadeMatrices[2 * cascadeIdx][1]));
+		glm::vec2 cascadeScale2 = glm::vec2(glm::length(shadowUBData.cascadeMatrices[2 * cascadeIdx + 1][0]), glm::length(shadowUBData.cascadeMatrices[2 * cascadeIdx + 1][1]));
 		shadowUBData.cascadeScales[cascadeIdx] = glm::vec4(cascadeScale1 / referenceScale, cascadeScale2 / referenceScale);
 	}
 

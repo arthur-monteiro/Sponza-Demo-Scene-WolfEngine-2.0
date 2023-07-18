@@ -37,6 +37,9 @@ float GeometrySchlickGGX(float NdotV, float roughness);
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness);
 vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness);
 
+#define INV_SQRT_OF_2PI 0.39894228040143267793994605993439  // 1.0/SQRT_OF_2PI
+#define INV_PI 0.31830988618379067153776752674503
+
 void main() 
 {
 	float shadow = imageLoad(shadowMask, ivec2(gl_FragCoord.xy)).r;

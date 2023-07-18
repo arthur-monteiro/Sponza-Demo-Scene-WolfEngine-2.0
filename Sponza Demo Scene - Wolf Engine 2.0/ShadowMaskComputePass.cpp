@@ -19,7 +19,7 @@ ShadowMaskComputePass::ShadowMaskComputePass(DepthPass* preDepthPass, CascadedSh
 void ShadowMaskComputePass::initializeResources(const Wolf::InitializationContext& context)
 {
 	m_commandBuffer.reset(new CommandBuffer(QueueType::COMPUTE, false /* isTransient */));
-	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
+	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT));
 
 	m_computeShaderParser.reset(new ShaderParser("Shaders/cascadedShadowMapping/shader.comp"));
 
@@ -35,6 +35,7 @@ void ShadowMaskComputePass::initializeResources(const Wolf::InitializationContex
 	m_uniformBuffer.reset(new Buffer(sizeof(ShadowUBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
 	m_shadowMapsSampler.reset(new Sampler(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, 1.0f, VK_FILTER_LINEAR));
 
+	// Noise
 	CreateImageInfo noiseImageCreateInfo;
 	noiseImageCreateInfo.extent = { NOISE_TEXTURE_SIZE_PER_SIDE, NOISE_TEXTURE_SIZE_PER_SIDE, NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE * NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE };
 	noiseImageCreateInfo.format = VK_FORMAT_R32G32_SFLOAT;
@@ -58,8 +59,8 @@ void ShadowMaskComputePass::initializeResources(const Wolf::InitializationContex
 					const uint32_t idx = texX + texY * NOISE_TEXTURE_SIZE_PER_SIDE + patternIdx * (NOISE_TEXTURE_SIZE_PER_SIDE * NOISE_TEXTURE_SIZE_PER_SIDE);
 
 					constexpr float PI = 3.14159265358979323846264338327950288f;
-					noiseData[2 * idx] = sqrtf(y) * cosf(2.0f * PI * x);
-					noiseData[2 * idx + 1] = sqrtf(y) * sinf(2.0f * PI * x);
+					noiseData[2 * idx] = sqrtf(y)* cosf(2.0f * PI * x);
+					noiseData[2 * idx + 1] = sqrtf(y)* sinf(2.0f * PI * x);
 				}
 			}
 		}
@@ -93,10 +94,10 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 
 	/* Update data */
 	ShadowUBData shadowUBData;
-	glm::mat4 modelMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));;
-	shadowUBData.invModelView = glm::inverse(context.camera->getViewMatrix() * modelMatrix);
+	//glm::mat4 modelMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));;
+	shadowUBData.invView = glm::inverse(context.camera->getViewMatrix());
 	shadowUBData.invProjection = glm::inverse(context.camera->getProjection());
-	shadowUBData.previousMVPMatrix = context.camera->getProjection() * context.camera->getPreviousViewMatrix() * modelMatrix;
+	shadowUBData.previousMVPMatrix = context.camera->getProjection() * context.camera->getPreviousViewMatrix();
 
 	const float near = context.camera->getNear();
 	const float far = context.camera->getFar();
@@ -202,7 +203,7 @@ void ShadowMaskComputePass::updateDescriptorSet() const
 	}
 	descriptorSetGenerator.setImages(2, shadowMapImageDescriptions);
 	descriptorSetGenerator.setSampler(3, *m_shadowMapsSampler);
-	descriptorSetGenerator.setCombinedImageSampler(4, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_noiseImage->getDefaultImageView(), *m_noiseSampler.get());
+	descriptorSetGenerator.setCombinedImageSampler(4, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_noiseImage->getDefaultImageView(), *m_noiseSampler);
 
 	for (uint32_t i = 0; i < MASK_COUNT; ++i)
 	{

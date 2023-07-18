@@ -2,7 +2,6 @@
 
 #include <chrono>
 #include <glm/glm.hpp>
-#include <iostream>
 #include <vector>
 
 #include <Buffer.h>
@@ -11,7 +10,6 @@
 #include <DescriptorSetLayout.h>
 #include <DescriptorSetLayoutGenerator.h>
 #include <FrameBuffer.h>
-#include <Image.h>
 #include <Mesh.h>
 #include <Pipeline.h>
 #include <RenderPass.h>
@@ -21,12 +19,13 @@
 #include "ShadowMaskBasePass.h"
 
 class DepthPass;
-class SponzaModel;
+class ObjectModel;
+class SceneElements;
 
 class ForwardPass : public Wolf::CommandRecordBase
 {
 public:
-	ForwardPass(const SponzaModel* sponzaModel, std::vector<Wolf::Image*> images, DepthPass* preDepthPass, ShadowMaskBasePass* shadowMaskPass);
+	ForwardPass(const SceneElements& sceneElements, DepthPass* preDepthPass, ShadowMaskBasePass* shadowMaskPass);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
@@ -40,6 +39,8 @@ private:
 	void createDescriptorSets();
 
 private:
+	const SceneElements& m_sceneElements;
+
 	std::unique_ptr<Wolf::RenderPass> m_renderPass;
 	DepthPass* m_preDepthPass;
 
@@ -61,16 +62,7 @@ private:
 	uint32_t m_swapChainHeight;
 
 	/* Resources*/
-	const SponzaModel* m_sponzaModel;
-	std::vector<Wolf::Image*> m_sponzaImages;
 	std::unique_ptr<Wolf::Sampler> m_sampler;
-	struct MatricesUBData
-	{
-		glm::mat4 model;
-		glm::mat4 view;
-		glm::mat4 projection;
-	};
-	std::unique_ptr<Wolf::Buffer> m_mvpUniformBuffer;
 
 	struct LightUBData
 	{

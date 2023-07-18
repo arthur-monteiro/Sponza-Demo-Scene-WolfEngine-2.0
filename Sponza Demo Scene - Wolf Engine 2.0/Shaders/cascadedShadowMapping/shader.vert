@@ -1,9 +1,10 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
+const uint MAX_MODELS = 2;
 layout(binding = 0) uniform UniformBufferMVP
 {
-    mat4 mvp;
+    mat4 mvp[MAX_MODELS];
 } ubMVP;
 
 layout(location = 0) in vec3 inPosition;
@@ -18,5 +19,7 @@ out gl_PerVertex
 };
 void main() 
 {
-	gl_Position = ubMVP.mvp * vec4(inPosition, 1.0);
+    uint modelIdx = inMaterialID >= 24 ? 1 : 0;
+
+	gl_Position = ubMVP.mvp[modelIdx] * vec4(inPosition, 1.0);
 } 

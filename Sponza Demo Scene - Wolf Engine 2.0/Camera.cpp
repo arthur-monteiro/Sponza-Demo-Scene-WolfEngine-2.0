@@ -14,6 +14,9 @@ Camera::Camera(glm::vec3 position, glm::vec3 target, glm::vec3 verticalAxis, flo
 
 void Camera::update(GLFWwindow* window)
 {
+	if (m_overrideViewMatrices)
+		return;
+
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS && m_oldEscapeState == GLFW_RELEASE)
 	{
 		m_locked = !m_locked;
@@ -82,6 +85,9 @@ glm::vec3 Camera::getPosition() const
 
 glm::mat4 Camera::getProjection() const
 {
+	if (m_overrideViewMatrices)
+		return m_overridenProjectionMatrix;
+
 	glm::mat4 r = glm::perspective(m_radFOV, m_aspect, m_near, m_far);
 	r[1][1] *= -1;
 
@@ -123,6 +129,15 @@ void Camera::setTarget(glm::vec3 target)
 		if (m_orientation.z < 0)
 			m_theta *= -1;
 	}
+}
+
+void Camera::overrideMatrices(const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix)
+{
+	m_viewMatrix = viewMatrix;
+	m_previousViewMatrix = viewMatrix;
+	m_overridenProjectionMatrix = projectionMatrix;
+
+	m_overrideViewMatrices = true;
 }
 
 void Camera::updateOrientation(int xOffset, int yOffset)

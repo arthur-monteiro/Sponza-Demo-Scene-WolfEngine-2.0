@@ -5,13 +5,14 @@
 #include <ObjLoader.h>
 #include <Timer.h>
 
-#include "SponzaModel.h"
+#include "ObjectModel.h"
+#include "SceneElements.h"
 
 using namespace Wolf;
 
-DepthPass::DepthPass(const SponzaModel* sponzaModel)
+DepthPass::DepthPass(const SceneElements& sceneElements) : m_sceneElements(sceneElements)
 {
-	m_sponzaModel = sponzaModel;
+
 }
 
 void DepthPass::initializeResources(const Wolf::InitializationContext& context)
@@ -31,12 +32,10 @@ void DepthPass::initializeResources(const Wolf::InitializationContext& context)
 
 	// Sponza resources
 	{
-		m_uniformBuffer.reset(new Buffer(sizeof(UBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
-
 		DescriptorSetGenerator descriptorSetGenerator(descriptorSetLayoutGenerator.getDescriptorLayouts());
-		descriptorSetGenerator.setBuffer(0, *m_uniformBuffer.get());
+		descriptorSetGenerator.setBuffer(0, m_sceneElements.getMatricesUB());
 
-		m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
+		m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
 		m_descriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
 	}
 
@@ -57,15 +56,6 @@ void DepthPass::resize(const Wolf::InitializationContext& context)
 
 void DepthPass::record(const Wolf::RecordContext& context)
 {
-	/* Update */
-	UBData mvp;
-	constexpr float near = 0.1f;
-	constexpr float far = 100.0f;
-	mvp.projection = context.camera->getProjection();
-	mvp.model = m_sponzaModel->getTransform();
-	mvp.view = context.camera->getViewMatrix();
-	m_uniformBuffer->transferCPUMemory((void*)&mvp, sizeof(mvp), 0 /* srcOffet */ , context.commandBufferIdx);
-
 	/* Command buffer record */
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
 
@@ -125,9 +115,9 @@ void DepthPass::createPipeline()
 void DepthPass::recordDraws(const RecordContext& context)
 {
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipeline());
-	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSet->getDescriptorSet(), 0, nullptr);
 
-	m_sponzaModel->getMesh()->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+	m_sceneElements.drawMeshes(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 }
 
 VkCommandBuffer DepthPass::getCommandBuffer(const RecordContext& context)

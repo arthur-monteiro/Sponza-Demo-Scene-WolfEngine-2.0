@@ -1,5 +1,8 @@
 #include "RayTracedShadowsPass.h"
 
+#include <fstream>
+#include <random>
+
 #include <CameraInterface.h>
 #include <CommandBuffer.h>
 #include <DescriptorSetGenerator.h>
@@ -8,11 +11,11 @@
 
 #include "DepthPass.h"
 #include "GameContext.h"
-#include "SponzaModel.h"
+#include "ObjectModel.h"
 
 using namespace Wolf;
 
-RayTracedShadowsPass::RayTracedShadowsPass(const SponzaModel* sponzaModel, DepthPass* preDepthPass)
+RayTracedShadowsPass::RayTracedShadowsPass(const ObjectModel* sponzaModel, DepthPass* preDepthPass)
 {
 	m_sponzaModel = sponzaModel;
 	m_preDepthPass = preDepthPass;
@@ -31,9 +34,40 @@ void RayTracedShadowsPass::initializeResources(const InitializationContext& cont
 	m_descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_RAYGEN_BIT_KHR,                                                1); // output image
 	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR,                    2, 1); // input depth
 	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_RAYGEN_BIT_KHR,											      3); // uniform buffer
+	m_descriptorSetLayoutGenerator.addCombinedImageSampler(VK_SHADER_STAGE_RAYGEN_BIT_KHR,                                        4); // noise map
 	m_descriptorSetLayout.reset(new DescriptorSetLayout(m_descriptorSetLayoutGenerator.getDescriptorLayouts()));
 
-	m_uniformBuffer.reset(new Buffer(sizeof(ShadowUBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
+	m_uniformBuffer.reset(new Buffer(sizeof(ShadowUBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::NEVER));
+
+	// Noise
+	CreateImageInfo noiseImageCreateInfo;
+	noiseImageCreateInfo.extent = { NOISE_TEXTURE_SIZE_PER_SIDE, NOISE_TEXTURE_SIZE_PER_SIDE, NOISE_TEXTURE_VECTOR_COUNT };
+	noiseImageCreateInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	noiseImageCreateInfo.mipLevelCount = 1;
+	noiseImageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	m_noiseImage.reset(new Image(noiseImageCreateInfo));
+
+	std::vector<float> noiseData(NOISE_TEXTURE_SIZE_PER_SIDE * NOISE_TEXTURE_SIZE_PER_SIDE * NOISE_TEXTURE_VECTOR_COUNT * 4);
+	for (int texY = 0; texY < NOISE_TEXTURE_SIZE_PER_SIDE; ++texY)
+	{
+		for (int texX = 0; texX < NOISE_TEXTURE_SIZE_PER_SIDE; ++texX)
+		{
+			for (int i = 0; i < NOISE_TEXTURE_VECTOR_COUNT; ++i)
+			{
+				glm::vec3 offsetDirection(jitter(), 2.0f * jitter() - 1.0f, jitter()); // each jitter returns a different value
+				offsetDirection = glm::normalize(offsetDirection);
+				
+				const uint32_t idx = texX + texY * NOISE_TEXTURE_SIZE_PER_SIDE + i * (NOISE_TEXTURE_SIZE_PER_SIDE * NOISE_TEXTURE_SIZE_PER_SIDE);
+
+				noiseData[4 * idx    ] = offsetDirection.x;
+				noiseData[4 * idx + 1] = offsetDirection.y;
+				noiseData[4 * idx + 2] = offsetDirection.z;
+			}
+		}
+	}
+	m_noiseImage->copyCPUBuffer(reinterpret_cast<unsigned char*>(noiseData.data()));
+
+	m_noiseSampler.reset(new Sampler(VK_SAMPLER_ADDRESS_MODE_REPEAT, 1.0f, VK_FILTER_NEAREST));
 
 	createPipeline();
 	createOutputImage(context.swapChainWidth, context.swapChainHeight);
@@ -46,9 +80,56 @@ void RayTracedShadowsPass::resize(const InitializationContext& context)
 	createDescriptorSet();
 }
 
+static bool willDoScreenshotsThisFrame = false;
+static uint32_t frameCounter = 0;
+static uint32_t imageCounter = 101;
 void RayTracedShadowsPass::record(const RecordContext& context)
 {
 	const GameContext* gameContext = static_cast<const GameContext*>(context.gameContext);
+
+	if (gameContext->shadowmapScreenshotsRequested)
+	{
+		willDoScreenshotsThisFrame = true;
+		saveMaskToFile("Exports/noisyImage_" + std::to_string(imageCounter) + ".jpg");
+
+		//m_preDepthPass->getOutput()->exportToFile("depthMap.jpg");
+
+		frameCounter = 16;
+	}
+	else
+	{
+		if(willDoScreenshotsThisFrame)
+		{
+			frameCounter--;
+
+			if (frameCounter == 0)
+			{
+				saveMaskToFile("Exports/cleanImage_" + std::to_string(imageCounter) + ".jpg");
+				willDoScreenshotsThisFrame = false;
+
+				std::ofstream exportPositionsFile;
+
+				exportPositionsFile.open("Exports/exportPositions.txt", std::ios_base::app); // append instead of overwrite
+				exportPositionsFile << "Export " << imageCounter << "\n";
+				exportPositionsFile << "View matrix: ";
+				for(uint32_t i = 0; i < 4; ++i)
+					for(uint32_t j = 0; j < 4; ++j)
+						exportPositionsFile << context.camera->getViewMatrix()[i][j] << ";";
+
+				exportPositionsFile << "\nProjection matrix: ";
+				for (uint32_t i = 0; i < 4; ++i)
+					for (uint32_t j = 0; j < 4; ++j)
+						exportPositionsFile << context.camera->getProjection()[i][j] << ";";
+
+				exportPositionsFile << "\nSun phi/theta: ";
+				exportPositionsFile << gameContext->sunPhi << ";" << gameContext->sunTheta;
+
+				exportPositionsFile << "\n\n";
+
+				imageCounter++;
+			}
+		}
+	}
 
 	/* Update data */
 	ShadowUBData shadowUBData;
@@ -58,8 +139,10 @@ void RayTracedShadowsPass::record(const RecordContext& context)
 	const float far = context.camera->getFar();
 	shadowUBData.projectionParams.x = far / (far - near);
 	shadowUBData.projectionParams.y = (-far * near) / (far - near);
-	shadowUBData.sunDirection = glm::vec4(-gameContext->sunDirection, 1.0f);
-	m_uniformBuffer->transferCPUMemory((void*)&shadowUBData, sizeof(shadowUBData), 0 /* srcOffet */, context.commandBufferIdx);
+	shadowUBData.sunDirectionAndNoiseIndex = glm::vec4(-gameContext->sunDirection, context.currentFrameIdx % NOISE_TEXTURE_VECTOR_COUNT);
+	shadowUBData.drawWithoutNoiseFrameIndex = frameCounter;
+
+	m_uniformBuffer->transferCPUMemory(&shadowUBData, sizeof(shadowUBData), 0 /* srcOffet */, context.commandBufferIdx);
 
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
 
@@ -110,6 +193,11 @@ void RayTracedShadowsPass::submit(const SubmitContext& context)
 	}
 }
 
+void RayTracedShadowsPass::saveMaskToFile(const std::string& filename)
+{
+	m_outputMask->exportToFile(filename);
+}
+
 void RayTracedShadowsPass::createPipeline()
 {
 	RayTracingShaderGroupGenerator shaderGroupGenerator;
@@ -155,9 +243,10 @@ void RayTracedShadowsPass::createDescriptorSet()
 	descriptorSetGenerator.setImage(1, outputImageDesc);
 	descriptorSetGenerator.setImage(2, preDepthImageDesc);
 	descriptorSetGenerator.setBuffer(3, *m_uniformBuffer);
+	descriptorSetGenerator.setCombinedImageSampler(4, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_noiseImage->getDefaultImageView(), *m_noiseSampler);
 
 	if (!m_descriptorSet)
-		m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
+		m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
 	m_descriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
 }
 
@@ -165,10 +254,17 @@ void RayTracedShadowsPass::createOutputImage(uint32_t width, uint32_t height)
 {
 	CreateImageInfo createImageInfo;
 	createImageInfo.extent = { width, height, 1 };
-	createImageInfo.format = VK_FORMAT_R32G32_SFLOAT;
+	createImageInfo.format = VK_FORMAT_R32_SFLOAT;
 	createImageInfo.mipLevelCount = 1;
 	createImageInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-	createImageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	createImageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	m_outputMask.reset(new Image(createImageInfo));
 	m_outputMask->setImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+}
+
+float RayTracedShadowsPass::jitter()
+{
+	static std::default_random_engine generator;
+	static std::uniform_real_distribution distrib(-0.5f, 0.5f);
+	return distrib(generator);
 }

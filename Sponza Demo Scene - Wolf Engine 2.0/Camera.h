@@ -11,7 +11,6 @@
 #include <GLFW/glfw3.h>
 
 #include <chrono>
-#include <iostream>
 
 #include <CameraInterface.h>
 
@@ -36,6 +35,8 @@ public:
 	void setTarget(glm::vec3 target);
 	void setFixed(bool value) { m_locked = value; }
 	void setAspect(float aspect) { m_aspect = aspect; }
+
+	void overrideMatrices(const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix);
 
 private:
 	void updateOrientation(int xOffset, int yOffset);
@@ -69,4 +70,7 @@ private:
 	glm::mat4 m_previousViewMatrix;
 
 	int m_oldEscapeState = 0;
+
+	bool m_overrideViewMatrices = false;
+	glm::mat4 m_overridenProjectionMatrix;
 };

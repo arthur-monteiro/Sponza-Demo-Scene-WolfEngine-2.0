@@ -1,5 +1,7 @@
 #include "SystemManager.h"
 
+#include <iostream>
+
 #include <TextFileReader.h>
 
 using namespace Wolf;
@@ -30,6 +32,7 @@ void SystemManager::run()
 			std::vector<CommandRecordBase*> passes(1);
 			passes[0] = m_loadingScreenUniquePass.get();
 
+			m_wolfInstance->updateEvents();
 			m_wolfInstance->frame(passes, m_loadingScreenUniquePass->getSemaphore());
 
 			m_mutex.unlock();
@@ -39,9 +42,11 @@ void SystemManager::run()
 		{
 			const uint32_t contextId = m_wolfInstance->getCurrentFrame() % g_configuration->getMaxCachedFrames();
 			GameContext& gameContext = m_gameContexts[contextId];
-			gameContext.sunDirection = glm::vec3(glm::sin(m_sunPhi) * glm::cos(m_sunTheta), glm::cos(m_sunTheta), glm::sin(m_sunPhi) * glm::sin(m_sunTheta));
+			gameContext.sunDirection = -glm::vec3(glm::sin(m_sunPhi) * glm::cos(m_sunTheta), glm::cos(m_sunPhi), glm::sin(m_sunPhi) * glm::sin(m_sunTheta));
+			gameContext.sunPhi = static_cast<float>(m_sunPhi);
+			gameContext.sunTheta = static_cast<float>(m_sunTheta);
 
-			m_sponzaScene->update(m_wolfInstance.get());
+			m_sponzaScene->update(m_wolfInstance.get(), gameContext);
 			m_sponzaScene->frame(m_wolfInstance.get());
 		}
 
@@ -121,10 +126,10 @@ ultralight::JSValue SystemManager::getFrameRate(const ultralight::JSObject& this
 
 void SystemManager::setSunTheta(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args)
 {
-	m_sunTheta = args[0].ToNumber() * 2.0 * M_PI;
+	m_sunTheta = (args[0].ToNumber() * 2.0 * M_PI) - M_PI;
 }
 
 void SystemManager::setSunPhi(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args)
 {
-	m_sunPhi = args[0].ToNumber() * M_PI;
+	m_sunPhi = (args[0].ToNumber() * M_PI) - M_PI_2;
 }

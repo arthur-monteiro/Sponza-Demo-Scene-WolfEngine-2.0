@@ -17,12 +17,12 @@
 #include <Sampler.h>
 #include <ShaderParser.h>
 
-class SponzaModel;
+class SceneElements;
 
 class DepthPass : public Wolf::CommandRecordBase, public Wolf::DepthPassBase
 {
 public:
-	DepthPass(const SponzaModel* sponzaModel);
+	DepthPass(const SceneElements& sceneElements);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
@@ -43,22 +43,15 @@ private:
 	VkCommandBuffer getCommandBuffer(const Wolf::RecordContext& context) override;
 
 private:
+	const SceneElements& m_sceneElements;
+
 	/* Pipeline */
 	std::unique_ptr<Wolf::Pipeline> m_pipeline;
 	std::unique_ptr<Wolf::ShaderParser> m_vertexShaderParser;
-	uint32_t m_swapChainWidth;
-	uint32_t m_swapChainHeight;
+	uint32_t m_swapChainWidth{};
+	uint32_t m_swapChainHeight{};
 
 	/* Resources*/
-	const SponzaModel* m_sponzaModel;
-	struct UBData
-	{
-		glm::mat4 model;
-		glm::mat4 view;
-		glm::mat4 projection;
-	};
-	std::unique_ptr<Wolf::Buffer> m_uniformBuffer;
-
 	std::unique_ptr<Wolf::DescriptorSetLayout> m_descriptorSetLayout;
 	std::unique_ptr<Wolf::DescriptorSet> m_descriptorSet;
 };

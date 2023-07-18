@@ -13,6 +13,7 @@
 #include "ShadowMaskBasePass.h"
 
 class DepthPass;
+class SharedGPUResources;
 
 class ShadowMaskComputePass : public Wolf::CommandRecordBase, public ShadowMaskBasePass
 {
@@ -44,15 +45,12 @@ private:
 	Wolf::DescriptorSetLayoutGenerator m_descriptorSetLayoutGenerator;
 	std::unique_ptr<Wolf::DescriptorSetLayout> m_descriptorSetLayout;
 	std::array<std::unique_ptr<Wolf::DescriptorSet>, MASK_COUNT> m_descriptorSets;
-
-	static constexpr uint32_t NOISE_TEXTURE_SIZE_PER_SIDE = 128;
-	static constexpr uint32_t NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE = 4;
 	std::array<float, 16> m_noiseRotations;
 	DepthPass* m_preDepthPass;
 	CascadedShadowMapping* m_csmManager;
 	struct ShadowUBData
 	{
-		glm::mat4 invModelView;
+		glm::mat4 invView;
 
 		glm::mat4 invProjection;
 
@@ -75,6 +73,10 @@ private:
 	};
 	std::unique_ptr<Wolf::Buffer> m_uniformBuffer;
 	std::unique_ptr<Wolf::Sampler> m_shadowMapsSampler;
+
+	// Noise
+	static constexpr uint32_t NOISE_TEXTURE_SIZE_PER_SIDE = 128;
+	static constexpr uint32_t NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE = 4;
 	std::unique_ptr<Wolf::Image> m_noiseImage;
 	std::unique_ptr<Wolf::Sampler> m_noiseSampler;
 };

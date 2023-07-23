@@ -29,8 +29,9 @@ public:
 
 	Wolf::Image* getOutput(uint32_t frameIdx) override { return m_outputMask.get(); }
 	const Wolf::Semaphore* getSemaphore() const override { return Wolf::CommandRecordBase::getSemaphore(); }
+	void getConditionalBlocksToEnableWhenReadingMask(std::vector<std::string>& conditionalBlocks) const override { conditionalBlocks.emplace_back("RAYTRACED_SHADOWS"); }
 
-	void saveMaskToFile(const std::string& filename);
+	void saveMaskToFile(const std::string& filename) const;
 
 private:
 	void createPipeline();

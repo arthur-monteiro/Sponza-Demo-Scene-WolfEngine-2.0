@@ -9,6 +9,7 @@
 #include <DescriptorSetLayoutGenerator.h>
 #include <RayTracingShaderGroupGenerator.h>
 
+#include "DebugMarker.h"
 #include "DepthPass.h"
 #include "GameContext.h"
 #include "ObjectModel.h"
@@ -146,6 +147,8 @@ void RayTracedShadowsPass::record(const RecordContext& context)
 
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
 
+	DebugMarker::beginRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), DebugMarker::rayTracePassDebugColor, "Ray Trace Shadow Pass");
+
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_pipeline->getPipeline());
 	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
 
@@ -171,6 +174,8 @@ void RayTracedShadowsPass::record(const RecordContext& context)
 		&rhitRegion,
 		&callRegion, m_outputMask->getExtent().width, m_outputMask->getExtent().height, 1);
 
+	DebugMarker::endRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+
 	m_commandBuffer->endCommandBuffer(context.commandBufferIdx);
 }
 
@@ -193,7 +198,7 @@ void RayTracedShadowsPass::submit(const SubmitContext& context)
 	}
 }
 
-void RayTracedShadowsPass::saveMaskToFile(const std::string& filename)
+void RayTracedShadowsPass::saveMaskToFile(const std::string& filename) const
 {
 	m_outputMask->exportToFile(filename);
 }

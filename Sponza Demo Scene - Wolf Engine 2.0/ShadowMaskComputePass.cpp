@@ -6,6 +6,7 @@
 #include <DescriptorSetGenerator.h>
 #include <ObjLoader.h>
 
+#include "DebugMarker.h"
 #include "DepthPass.h"
 
 using namespace Wolf;
@@ -126,9 +127,9 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 	m_uniformBuffer->transferCPUMemory((void*)&shadowUBData, sizeof(shadowUBData), 0 /* srcOffet */, context.commandBufferIdx);
 
 	/* Command buffer record */
-	uint32_t frameBufferIdx = context.swapChainImageIdx;
-
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
+
+	DebugMarker::beginRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), DebugMarker::computePassDebugColor, "Shadow Mask Compute Pass");
 
 	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline->getPipelineLayout(), 0, 1, 
 		m_descriptorSets[currentMaskIdx]->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
@@ -139,6 +140,8 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 	const uint32_t groupSizeX = m_outputMasks[currentMaskIdx]->getExtent().width % dispatchGroups.width != 0 ? m_outputMasks[currentMaskIdx]->getExtent().width / dispatchGroups.width + 1 : m_outputMasks[currentMaskIdx]->getExtent().width / dispatchGroups.width;
 	const uint32_t groupSizeY = m_outputMasks[currentMaskIdx]->getExtent().height % dispatchGroups.height != 0 ? m_outputMasks[currentMaskIdx]->getExtent().height / dispatchGroups.height + 1 : m_outputMasks[currentMaskIdx]->getExtent().height / dispatchGroups.height;
 	vkCmdDispatch(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), groupSizeX, groupSizeY, dispatchGroups.depth);
+
+	DebugMarker::endRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
 	m_commandBuffer->endCommandBuffer(context.commandBufferIdx);
 }

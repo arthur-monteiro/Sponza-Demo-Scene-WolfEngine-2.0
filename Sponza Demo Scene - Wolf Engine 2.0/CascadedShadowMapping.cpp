@@ -4,6 +4,7 @@
 #include <DescriptorSetGenerator.h>
 #include <ObjLoader.h>
 
+#include "DebugMarker.h"
 #include "DepthPass.h"
 #include "GameContext.h"
 #include "SceneElements.h"
@@ -179,10 +180,16 @@ void CascadedShadowMapping::record(const Wolf::RecordContext& context)
 	/* Command buffer record */
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
 
-	for (uint32_t i = 0; i < m_cascadeDepthPasses.size(); ++i)
+	DebugMarker::beginRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), DebugMarker::renderPassDebugColor, "Cascade shadow maps");
+
+	for (uint32_t i = 0, end = m_cascadeDepthPasses.size(); i < end ; ++i)
 	{
+		constexpr float color[4] = { 0.4f, 0.4f, 0.4f, 1.0f };
+		DebugMarker::insert(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), color, "Cascade " + std::to_string(i));
 		m_cascadeDepthPasses[i]->record(context);
 	}
+
+	DebugMarker::endRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
 	m_commandBuffer->endCommandBuffer(context.commandBufferIdx);
 }
@@ -193,12 +200,10 @@ void CascadedShadowMapping::submit(const Wolf::SubmitContext& context)
 	std::vector<VkSemaphore> signalSemaphores{ m_semaphore->getSemaphore() };
 	m_commandBuffer->submit(context.commandBufferIdx, waitSemaphores, signalSemaphores, VK_NULL_HANDLE);
 
-	bool anyShaderModified = m_vertexShaderParser->compileIfFileHasBeenModified();
-
-	if (anyShaderModified)
+	if (m_vertexShaderParser->compileIfFileHasBeenModified())
 	{
 		vkDeviceWaitIdle(context.device);
-		for (auto& cascade : m_cascadeDepthPasses)
+		for (const auto& cascade : m_cascadeDepthPasses)
 			cascade->shaderChanged();
 	}
 }

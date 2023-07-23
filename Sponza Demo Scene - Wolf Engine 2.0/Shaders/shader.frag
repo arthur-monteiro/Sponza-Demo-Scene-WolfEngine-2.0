@@ -20,9 +20,15 @@ layout(binding = 4, std140) uniform readonly UniformBufferLighting
 	vec3 colorDirectionalLight;
 } ubLighting;
 
+layout (binding = 5, r32f) uniform image2D depthTexture;
+
 layout (location = 0) out vec4 outColor;
 
 #include "ShaderCommon.glsl"
+
+#if RAYTRACED_SHADOWS
+#include "rayTracedShadows/denoising.glsl"
+#endif
 
 const mat4 biasMat = mat4( 
 	0.5, 0.0, 0.0, 0.0,
@@ -37,18 +43,19 @@ float GeometrySchlickGGX(float NdotV, float roughness);
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness);
 vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness);
 
-#define INV_SQRT_OF_2PI 0.39894228040143267793994605993439  // 1.0/SQRT_OF_2PI
-#define INV_PI 0.31830988618379067153776752674503
-
 void main() 
 {
-	float shadow = imageLoad(shadowMask, ivec2(gl_FragCoord.xy)).r;
-
 	vec3 albedo = texture(sampler2D(textures[inMaterialID * 5     + 0], textureSampler), inTexCoords).rgb;
 	vec3 normal = (texture(sampler2D(textures[inMaterialID * 5    + 1], textureSampler), inTexCoords).rgb * 2.0 - vec3(1.0)) * inTBN;
 	float roughness = texture(sampler2D(textures[inMaterialID * 5 + 2], textureSampler), inTexCoords).r;
 	float metalness = texture(sampler2D(textures[inMaterialID * 5 + 3], textureSampler), inTexCoords).r;
     normal = normalize(normal);
+
+    #if RAYTRACED_SHADOWS
+    float shadow = computeShadows(normal);
+#else
+	float shadow = imageLoad(shadowMask, ivec2(gl_FragCoord.xy)).r;
+#endif
 
 	vec3 V = normalize(-inViewPos);
     vec3 R = reflect(-V, normal);
@@ -116,6 +123,7 @@ float GeometrySchlickGGX(float NdotV, float roughness)
 
     return nom / denom;
 }
+
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
 {
     float NdotV = max(dot(N, V), 0.0);

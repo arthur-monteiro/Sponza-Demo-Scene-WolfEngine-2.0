@@ -67,7 +67,7 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 	m_inputHandler.reset(new InputHandler());
 	wolfInstance->registerInputHandlerInterface(m_inputHandler.get());
 
-	m_depthPass.reset(new DepthPass(m_sceneElements));
+	m_depthPass.reset(new DepthPass(m_sceneElements, true));
 	wolfInstance->initializePass(m_depthPass.get());
 
 	m_cascadedShadowMappingPass.reset(new CascadedShadowMapping(m_sceneElements));

@@ -5,9 +5,9 @@
 
 #include <Attachment.h>
 #include <CameraInterface.h>
+#include <DebugMarker.h>
 #include <DescriptorSetGenerator.h>
 #include <Image.h>
-#include <ImageFileLoader.h>
 #include <FrameBuffer.h>
 #include <ObjLoader.h>
 #include <Timer.h>
@@ -55,10 +55,14 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 2, m_sceneElements.getImageCount());
 	m_descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_FRAGMENT_BIT,                             3);
 	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_FRAGMENT_BIT,                            4); // light ub
+	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 5, 1); // depth buffer
 	m_descriptorSetLayout.reset(new DescriptorSetLayout(m_descriptorSetLayoutGenerator.getDescriptorLayouts()));
 
-	m_vertexShaderParser.reset(new ShaderParser("Shaders/shader.vert", { "COMPUTE_SHADOWS" }));
-	m_fragmentShaderParser.reset(new ShaderParser("Shaders/shader.frag"));
+	m_vertexShaderParser.reset(new ShaderParser("Shaders/shader.vert"));
+
+	std::vector<std::string> conditionalBlocks;
+	m_shadowMaskPass->getConditionalBlocksToEnableWhenReadingMask(conditionalBlocks);
+	m_fragmentShaderParser.reset(new ShaderParser("Shaders/shader.frag", conditionalBlocks));
 
 	m_userInterfaceVertexShaderParser.reset(new ShaderParser("Shaders/UI.vert"));
 	m_userInterfaceFragmentShaderParser.reset(new ShaderParser("Shaders/UI.frag"));
@@ -138,9 +142,11 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 	m_lightUniformBuffer->transferCPUMemory(&lightUBData, sizeof(lightUBData), 0 /* srcOffet */);
 
 	/* Command buffer record */
-	uint32_t frameBufferIdx = context.swapChainImageIdx;
+	const uint32_t frameBufferIdx = context.swapChainImageIdx;
 
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
+
+	DebugMarker::beginRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), DebugMarker::renderPassDebugColor, "Forward pass");
 
 	m_preDepthPass->getOutput()->setImageLayoutWithoutOperation(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL); // at this point, preDepthPass should have set layout with render pass
 	m_preDepthPass->getOutput()->transitionImageLayout(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
@@ -165,6 +171,8 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 	m_fullscreenRect->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
 	m_renderPass->endRenderPass(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+
+	DebugMarker::endRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
 	m_commandBuffer->endCommandBuffer(context.commandBufferIdx);
 }
@@ -306,6 +314,11 @@ void ForwardPass::createDescriptorSets()
 	descriptorSetGenerator.setImages(2, imageDescriptions);
 	DescriptorSetGenerator::ImageDescription shadowMaskDesc;
 	descriptorSetGenerator.setBuffer(4, *m_lightUniformBuffer);
+
+	DescriptorSetGenerator::ImageDescription depthBufferDescription;
+	depthBufferDescription.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	depthBufferDescription.imageView = m_preDepthPass->getCopy()->getDefaultImageView();
+	descriptorSetGenerator.setImages(5, { depthBufferDescription });
 
 	for (uint32_t i = 0; i < ShadowMaskComputePass::MASK_COUNT; ++i)
 	{

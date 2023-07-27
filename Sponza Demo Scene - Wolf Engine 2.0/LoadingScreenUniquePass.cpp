@@ -52,12 +52,12 @@ void LoadingScreenUniquePass::initializeResources(const Wolf::InitializationCont
 	createImageInfo.mipLevelCount = 1;
 	createImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 	m_loadingScreenTexture.reset(new Image(createImageInfo));
-	m_loadingScreenTexture->copyCPUBuffer(loadingScreenFileLoader.getPixels());
+	m_loadingScreenTexture->copyCPUBuffer(loadingScreenFileLoader.getPixels(), Image::SampledInFragmentShader());
 
 	ImageFileLoader loadingIconFileLoader("Textures/loadingIcon.png");
 	createImageInfo.extent = { (uint32_t)loadingIconFileLoader.getWidth(), (uint32_t)loadingIconFileLoader.getHeight(), 1 };
 	m_loadingIconTexture.reset(new Image(createImageInfo));
-	m_loadingIconTexture->copyCPUBuffer(loadingIconFileLoader.getPixels());
+	m_loadingIconTexture->copyCPUBuffer(loadingIconFileLoader.getPixels(), Image::SampledInFragmentShader());
 
 	m_sampler.reset(new Sampler(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER, 1.0f, VK_FILTER_LINEAR));
 

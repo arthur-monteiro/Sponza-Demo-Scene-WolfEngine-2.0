@@ -30,6 +30,7 @@ public:
 	Wolf::Image* getOutput(uint32_t frameIdx) override { return m_outputMask.get(); }
 	const Wolf::Semaphore* getSemaphore() const override { return Wolf::CommandRecordBase::getSemaphore(); }
 	void getConditionalBlocksToEnableWhenReadingMask(std::vector<std::string>& conditionalBlocks) const override { conditionalBlocks.emplace_back("RAYTRACED_SHADOWS"); }
+	Wolf::Image* getDenoisingPatternImage() override { return m_denoiseSamplingPattern.get(); }
 
 	void saveMaskToFile(const std::string& filename) const;
 
@@ -73,5 +74,9 @@ private:
 	static constexpr uint32_t NOISE_TEXTURE_VECTOR_COUNT = 16;
 	std::unique_ptr<Wolf::Image> m_noiseImage;
 	std::unique_ptr<Wolf::Sampler> m_noiseSampler;
+
+	// Denoise
+	static constexpr uint32_t DENOISE_TEXTURE_SIZE = 25;
+	std::unique_ptr<Wolf::Image> m_denoiseSamplingPattern;
 };
 

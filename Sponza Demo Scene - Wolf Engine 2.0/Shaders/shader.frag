@@ -18,9 +18,14 @@ layout(binding = 4, std140) uniform readonly UniformBufferLighting
 {
 	vec3 directionDirectionalLight;
 	vec3 colorDirectionalLight;
+    uvec2 outputSize;
+    float near;
+    float far;
 } ubLighting;
 
-layout (binding = 5, r32f) uniform image2D depthTexture;
+#if RAYTRACED_SHADOWS
+layout (binding = 5) uniform texture2D depthTexture;
+#endif
 
 layout (location = 0) out vec4 outColor;
 
@@ -51,7 +56,7 @@ void main()
 	float metalness = texture(sampler2D(textures[inMaterialID * 5 + 3], textureSampler), inTexCoords).r;
     normal = normalize(normal);
 
-    #if RAYTRACED_SHADOWS
+#if RAYTRACED_SHADOWS
     float shadow = computeShadows(normal);
 #else
 	float shadow = imageLoad(shadowMask, ivec2(gl_FragCoord.xy)).r;

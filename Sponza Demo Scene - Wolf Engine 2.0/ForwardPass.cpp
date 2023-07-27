@@ -50,13 +50,7 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 
 	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
 
-	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT,                              0); // matrices
-	m_descriptorSetLayoutGenerator.addSampler(VK_SHADER_STAGE_FRAGMENT_BIT,                                  1);
-	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 2, m_sceneElements.getImageCount());
-	m_descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_FRAGMENT_BIT,                             3);
-	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_FRAGMENT_BIT,                            4); // light ub
-	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 5, 1); // depth buffer
-	m_descriptorSetLayout.reset(new DescriptorSetLayout(m_descriptorSetLayoutGenerator.getDescriptorLayouts()));
+	createDescriptorSetLayout();
 
 	m_vertexShaderParser.reset(new ShaderParser("Shaders/shader.vert"));
 
@@ -72,7 +66,7 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 		m_sampler.reset(new Sampler(VK_SAMPLER_ADDRESS_MODE_REPEAT, 11, VK_FILTER_LINEAR));
 		m_lightUniformBuffer.reset(new Buffer(sizeof(LightUBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::NEVER));
 
-		createDescriptorSets();
+		createDescriptorSets(true);
 	}
 
 	// UI resources
@@ -134,11 +128,14 @@ void ForwardPass::resize(const Wolf::InitializationContext& context)
 void ForwardPass::record(const Wolf::RecordContext& context)
 {
 	const GameContext* gameContext = static_cast<const GameContext*>(context.gameContext);
-	uint32_t currentMaskIdx = context.currentFrameIdx % ShadowMaskComputePass::MASK_COUNT;
+	const uint32_t currentMaskIdx = context.currentFrameIdx % ShadowMaskComputePass::MASK_COUNT;
 
 	LightUBData lightUBData;
 	lightUBData.colorDirectionalLight = gameContext->sunColor;
 	lightUBData.directionDirectionalLight = glm::transpose(glm::inverse(context.camera->getViewMatrix())) * glm::vec4(gameContext->sunDirection, 1.0f);
+	lightUBData.outputSize = glm::uvec2(m_preDepthPass->getOutput()->getExtent().width, m_preDepthPass->getOutput()->getExtent().height);
+	lightUBData.near = context.camera->getNear();
+	lightUBData.far = context.camera->getFar();
 	m_lightUniformBuffer->transferCPUMemory(&lightUBData, sizeof(lightUBData), 0 /* srcOffet */);
 
 	/* Command buffer record */
@@ -149,8 +146,8 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 	DebugMarker::beginRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), DebugMarker::renderPassDebugColor, "Forward pass");
 
 	m_preDepthPass->getOutput()->setImageLayoutWithoutOperation(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL); // at this point, preDepthPass should have set layout with render pass
-	m_preDepthPass->getOutput()->transitionImageLayout(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
+	m_preDepthPass->getOutput()->transitionImageLayout(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), { VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT });
 
 	std::vector<VkClearValue> clearValues(2);
 	clearValues[0] = { 0.0f };
@@ -184,12 +181,16 @@ void ForwardPass::submit(const Wolf::SubmitContext& context)
 	m_commandBuffer->submit(context.commandBufferIdx, waitSemaphores, signalSemaphores, context.frameFence);
 
 	bool anyShaderModified = m_vertexShaderParser->compileIfFileHasBeenModified();
-	if (m_fragmentShaderParser->compileIfFileHasBeenModified())
+	std::vector<std::string> conditionalBlocks;
+	m_shadowMaskPass->getConditionalBlocksToEnableWhenReadingMask(conditionalBlocks);
+	if (m_fragmentShaderParser->compileIfFileHasBeenModified(conditionalBlocks))
 		anyShaderModified = true;
 
 	if (anyShaderModified)
 	{
 		vkDeviceWaitIdle(context.device);
+		createDescriptorSetLayout();
+		createDescriptorSets(true);
 		createPipelines(m_swapChainWidth, m_swapChainHeight);
 	}
 }
@@ -197,7 +198,6 @@ void ForwardPass::submit(const Wolf::SubmitContext& context)
 void ForwardPass::setShadowMaskPass(ShadowMaskBasePass* shadowMaskPass)
 {
 	m_shadowMaskPass = shadowMaskPass;
-	createDescriptorSets();
 }
 
 void ForwardPass::createPipelines(uint32_t width, uint32_t height)
@@ -298,7 +298,23 @@ void ForwardPass::createPipelines(uint32_t width, uint32_t height)
 	m_swapChainHeight = height;
 }
 
-void ForwardPass::createDescriptorSets()
+void ForwardPass::createDescriptorSetLayout()
+{
+	m_descriptorSetLayoutGenerator.reset();
+	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT, 0); // matrices
+	m_descriptorSetLayoutGenerator.addSampler(VK_SHADER_STAGE_FRAGMENT_BIT, 1);
+	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 2, m_sceneElements.getImageCount());
+	m_descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_FRAGMENT_BIT, 3);
+	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_FRAGMENT_BIT, 4); // light ub
+	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 5, 1); // depth buffer
+	if (m_shadowMaskPass->getDenoisingPatternImage())
+	{
+		m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 6, 1); // denoising sampling pattern	
+	}
+	m_descriptorSetLayout.reset(new DescriptorSetLayout(m_descriptorSetLayoutGenerator.getDescriptorLayouts()));
+}
+
+void ForwardPass::createDescriptorSets(bool forceReset)
 {
 	DescriptorSetGenerator descriptorSetGenerator(m_descriptorSetLayoutGenerator.getDescriptorLayouts());
 	descriptorSetGenerator.setBuffer(0, m_sceneElements.getMatricesUB());
@@ -320,13 +336,21 @@ void ForwardPass::createDescriptorSets()
 	depthBufferDescription.imageView = m_preDepthPass->getCopy()->getDefaultImageView();
 	descriptorSetGenerator.setImages(5, { depthBufferDescription });
 
+	if(Image* denoisingPatternImage = m_shadowMaskPass->getDenoisingPatternImage())
+	{
+		DescriptorSetGenerator::ImageDescription denoisingPatternTextureDescription;
+		denoisingPatternTextureDescription.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		denoisingPatternTextureDescription.imageView = denoisingPatternImage->getDefaultImageView();
+		descriptorSetGenerator.setImages(6, { denoisingPatternTextureDescription });
+	}
+
 	for (uint32_t i = 0; i < ShadowMaskComputePass::MASK_COUNT; ++i)
 	{
 		shadowMaskDesc.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 		shadowMaskDesc.imageView = m_shadowMaskPass->getOutput(i)->getDefaultImageView();
 		descriptorSetGenerator.setImage(3, shadowMaskDesc);
 
-		if (!m_descriptorSets[i])
+		if (!m_descriptorSets[i] || forceReset)
 			m_descriptorSets[i].reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
 		m_descriptorSets[i]->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
 	}

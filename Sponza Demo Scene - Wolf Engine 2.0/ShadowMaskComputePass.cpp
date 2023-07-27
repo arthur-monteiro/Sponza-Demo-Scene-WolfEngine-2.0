@@ -66,7 +66,7 @@ void ShadowMaskComputePass::initializeResources(const Wolf::InitializationContex
 			}
 		}
 	}
-	m_noiseImage->copyCPUBuffer(reinterpret_cast<unsigned char*>(noiseData.data()));
+	m_noiseImage->copyCPUBuffer(reinterpret_cast<unsigned char*>(noiseData.data()), Image::SampledInFragmentShader());
 
 	m_noiseSampler.reset(new Sampler(VK_SAMPLER_ADDRESS_MODE_REPEAT, 1.0f, VK_FILTER_NEAREST));
 
@@ -170,7 +170,7 @@ void ShadowMaskComputePass::createOutputImages(uint32_t width, uint32_t height)
 	for (uint32_t i = 0; i < MASK_COUNT; ++i)
 	{
 		m_outputMasks[i].reset(new Image(createImageInfo));
-		m_outputMasks[i]->setImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+		m_outputMasks[i]->setImageLayout({ VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT });
 	}
 }
 

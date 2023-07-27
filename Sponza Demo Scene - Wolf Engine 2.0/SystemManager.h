@@ -28,6 +28,7 @@ private:
 	ultralight::JSValue getFrameRate(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
 	void setSunTheta(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
 	void setSunPhi(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
+	void setShadows(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
 
 private:
 	std::unique_ptr<Wolf::WolfEngine> m_wolfInstance;

@@ -21,6 +21,12 @@ public:
 	void update(const Wolf::WolfEngine* wolfInstance, GameContext& gameContext);
 	void frame(Wolf::WolfEngine* wolfInstance) const;
 
+	enum class ShadowType
+	{
+		CSM, RayTraced
+	};
+	void setShadowType(ShadowType shadowType) { m_nextPassState.shadowType = shadowType; }
+
 private:
 	std::chrono::high_resolution_clock::time_point m_startTime = std::chrono::high_resolution_clock::now();
 
@@ -44,10 +50,7 @@ private:
 
 	struct PassState
 	{
-		enum class ShadowType
-		{
-			CSM, RayTraced
-		} shadowType = ShadowType::RayTraced;
+		ShadowType shadowType = ShadowType::CSM;
 	};
 
 	PassState m_currentPassState;

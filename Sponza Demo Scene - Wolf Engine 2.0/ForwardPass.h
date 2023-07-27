@@ -36,7 +36,8 @@ public:
 
 private:
 	void createPipelines(uint32_t width, uint32_t height);
-	void createDescriptorSets();
+	void createDescriptorSetLayout();
+	void createDescriptorSets(bool forceReset);
 
 private:
 	const SceneElements& m_sceneElements;
@@ -70,6 +71,11 @@ private:
 		float padding;
 
 		glm::vec3 colorDirectionalLight;
+		float padding2;
+
+		glm::uvec2 outputSize;
+		float near;
+		float far;
 	};
 	std::unique_ptr<Wolf::Buffer> m_lightUniformBuffer;
 

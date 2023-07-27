@@ -83,7 +83,7 @@ void DepthPass::record(const Wolf::RecordContext& context)
 
 	m_depthImage->setImageLayoutWithoutOperation(getFinalLayout()); // at this point, preDepthPass should have set layout with render pass
 	m_copyImage->recordCopyGPUImage(*m_depthImage, copyRegion, m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
-	m_depthImage->transitionImageLayout(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+	m_depthImage->transitionImageLayout(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), { VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT });
 
 	m_commandBuffer->endCommandBuffer(context.commandBufferIdx);
 }

@@ -28,6 +28,7 @@ public:
 	Wolf::Image* getOutput(uint32_t frameIdx) override { return m_outputMasks[frameIdx % MASK_COUNT].get(); }
 	const Wolf::Semaphore* getSemaphore() const override { return Wolf::CommandRecordBase::getSemaphore(); }
 	void getConditionalBlocksToEnableWhenReadingMask(std::vector<std::string>& conditionalBlocks) const override {}
+	Wolf::Image* getDenoisingPatternImage() override { return nullptr; }
 
 private:
 	void createOutputImages(uint32_t width, uint32_t height);

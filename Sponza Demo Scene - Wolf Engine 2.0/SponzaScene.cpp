@@ -51,11 +51,11 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 		createImageInfo.mipLevelCount = mipmapGenerator.getMipLevelCount();
 		createImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		m_cubeImages[idx].reset(new Image(createImageInfo));
-		m_cubeImages[idx]->copyCPUBuffer(imageFileLoader.getPixels());
+		m_cubeImages[idx]->copyCPUBuffer(imageFileLoader.getPixels(), Image::SampledInFragmentShader());
 
 		for (uint32_t mipLevel = 1; mipLevel < mipmapGenerator.getMipLevelCount(); ++mipLevel)
 		{
-			m_cubeImages[idx]->copyCPUBuffer(mipmapGenerator.getMipLevel(mipLevel), mipLevel);
+			m_cubeImages[idx]->copyCPUBuffer(mipmapGenerator.getMipLevel(mipLevel), Image::SampledInFragmentShader(mipLevel), mipLevel);
 		}
 
 		m_sceneElements.addImage(m_cubeImages[idx].get());
@@ -83,7 +83,7 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 	}
 
 	m_forwardPass.reset(new ForwardPass(m_sceneElements, m_depthPass.get(),
-		m_currentPassState.shadowType == PassState::ShadowType::CSM ? static_cast<ShadowMaskBasePass*>(m_shadowMaskComputePass.get()) : static_cast<ShadowMaskBasePass*>(m_rayTracedShadowsPass.get())));
+		m_currentPassState.shadowType == ShadowType::CSM ? static_cast<ShadowMaskBasePass*>(m_shadowMaskComputePass.get()) : static_cast<ShadowMaskBasePass*>(m_rayTracedShadowsPass.get())));
 	wolfInstance->initializePass(m_forwardPass.get());
 }
 
@@ -94,7 +94,7 @@ void SponzaScene::update(const WolfEngine* wolfInstance, GameContext& gameContex
 	if(m_nextPassState.shadowType != m_currentPassState.shadowType)
 	{
 		wolfInstance->waitIdle();
-		m_forwardPass->setShadowMaskPass(m_nextPassState.shadowType == PassState::ShadowType::CSM ? static_cast<ShadowMaskBasePass*>(m_shadowMaskComputePass.get()) : static_cast<ShadowMaskBasePass*>(m_rayTracedShadowsPass.get()));
+		m_forwardPass->setShadowMaskPass(m_nextPassState.shadowType == ShadowType::CSM ? static_cast<ShadowMaskBasePass*>(m_shadowMaskComputePass.get()) : static_cast<ShadowMaskBasePass*>(m_rayTracedShadowsPass.get()));
 	}
 
 	m_currentPassState = m_nextPassState;
@@ -194,7 +194,7 @@ void SponzaScene::frame(WolfEngine* wolfInstance) const
 {
 	std::vector<CommandRecordBase*> passes;
 	passes.push_back(m_depthPass.get());
-	if(m_currentPassState.shadowType == PassState::ShadowType::CSM)
+	if(m_currentPassState.shadowType == ShadowType::CSM)
 	{
 		passes.push_back(m_cascadedShadowMappingPass.get());
 		passes.push_back(m_shadowMaskComputePass.get());

@@ -79,6 +79,7 @@ void SystemManager::createWolfInstance()
 	jsObject["getFrameRate"] = static_cast<ultralight::JSCallbackWithRetval>(std::bind(&SystemManager::getFrameRate, this, std::placeholders::_1, std::placeholders::_2));
 	jsObject["setSunTheta"] = std::bind(&SystemManager::setSunTheta, this, std::placeholders::_1, std::placeholders::_2);
 	jsObject["setSunPhi"] = std::bind(&SystemManager::setSunPhi, this, std::placeholders::_1, std::placeholders::_2);
+	jsObject["setShadows"] = std::bind(&SystemManager::setShadows, this, std::placeholders::_1, std::placeholders::_2);
 
 	m_gameContexts.reserve(g_configuration->getMaxCachedFrames());
 	std::vector<void*> contextPtrs(g_configuration->getMaxCachedFrames());
@@ -132,4 +133,21 @@ void SystemManager::setSunTheta(const ultralight::JSObject& thisObject, const ul
 void SystemManager::setSunPhi(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args)
 {
 	m_sunPhi = (args[0].ToNumber() * M_PI) - M_PI_2;
+}
+
+void SystemManager::setShadows(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args)
+{
+	const std::string shadowType(static_cast<ultralight::String>(args[0].ToString()).utf8().data());
+	if(shadowType == "Shadow Mapping")
+	{
+		m_sponzaScene->setShadowType(SponzaScene::ShadowType::CSM);
+	}
+	else if(shadowType == "Ray Tracing")
+	{
+		m_sponzaScene->setShadowType(SponzaScene::ShadowType::RayTraced);
+	}
+	else
+	{
+		Debug::sendError("Unsupported shadow type");
+	}
 }

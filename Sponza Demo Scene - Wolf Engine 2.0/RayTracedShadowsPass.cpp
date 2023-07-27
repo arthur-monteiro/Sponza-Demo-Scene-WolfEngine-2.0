@@ -66,9 +66,31 @@ void RayTracedShadowsPass::initializeResources(const InitializationContext& cont
 			}
 		}
 	}
-	m_noiseImage->copyCPUBuffer(reinterpret_cast<unsigned char*>(noiseData.data()));
+	m_noiseImage->copyCPUBuffer(reinterpret_cast<unsigned char*>(noiseData.data()), Image::SampledInFragmentShader());
 
 	m_noiseSampler.reset(new Sampler(VK_SAMPLER_ADDRESS_MODE_REPEAT, 1.0f, VK_FILTER_NEAREST));
+
+	// Denoise
+	CreateImageInfo denoiseSamplingPatternImageCreateInfo;
+	denoiseSamplingPatternImageCreateInfo.extent = { DENOISE_TEXTURE_SIZE, 1, 1 };
+	denoiseSamplingPatternImageCreateInfo.format = VK_FORMAT_R32G32_SFLOAT;
+	denoiseSamplingPatternImageCreateInfo.mipLevelCount = 1;
+	denoiseSamplingPatternImageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+	m_denoiseSamplingPattern.reset(new Image(denoiseSamplingPatternImageCreateInfo));
+
+	const uint32_t samplingPointCountPerSide = glm::sqrt(DENOISE_TEXTURE_SIZE);
+	constexpr float distanceBetweenSamples = 1.0f;
+	const float startingSamplePointOffset = -static_cast<int>(samplingPointCountPerSide / 2.0f) * distanceBetweenSamples;
+
+	std::array<glm::vec2, DENOISE_TEXTURE_SIZE> samplingPoints;
+	for(uint32_t x = 0; x < samplingPointCountPerSide; ++x)
+	{
+		for(uint32_t y = 0; y < samplingPointCountPerSide; ++y)
+		{
+			samplingPoints[x + y * samplingPointCountPerSide] = glm::vec2(x, y) * distanceBetweenSamples + glm::vec2(startingSamplePointOffset);
+		}
+	}
+	m_denoiseSamplingPattern->copyCPUBuffer(reinterpret_cast<unsigned char*>(samplingPoints.data()), { VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_READ_BIT , VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT });
 
 	createPipeline();
 	createOutputImage(context.swapChainWidth, context.swapChainHeight);
@@ -264,7 +286,7 @@ void RayTracedShadowsPass::createOutputImage(uint32_t width, uint32_t height)
 	createImageInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 	createImageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	m_outputMask.reset(new Image(createImageInfo));
-	m_outputMask->setImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+	m_outputMask->setImageLayout({ VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR });
 }
 
 float RayTracedShadowsPass::jitter()

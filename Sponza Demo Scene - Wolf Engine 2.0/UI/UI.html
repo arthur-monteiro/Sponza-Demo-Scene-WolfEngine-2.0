@@ -8,20 +8,28 @@
 			<div class="card-title">Sun Position Phi</div>
 			<wolf-slider
 				max="1"
-				oninput="setSunPhi"
+				onchange="setSunPhi"
 			></wolf-slider>
 		</div>
 		<div class="card">
 			<div class="card-title">Sun Position Theta</div>
 			<wolf-slider
 				max="1"
-				oninput="setSunTheta"
+				onchange="setSunTheta"
 			></wolf-slider>
+		</div>
+		<div class="card">
+			<div class="card-title">Shadows</div>
+			<wolf-select id="shadows-select" onchange="setShadows">
+				<option value="Shadow Mapping">Shadow Mapping</option>
+				<option value="Ray Tracing">Ray Tracing</option>
+			</wolf-select>			
 		</div>
 	</div>
 	<div class="frameRate" id="frameRate">FPS: 60</div>
 
     <script src="./slider.js"></script>
+    <script src="./select.js"></script>
 	<script type="text/javascript">
 	function updateFrameRate()
 	{

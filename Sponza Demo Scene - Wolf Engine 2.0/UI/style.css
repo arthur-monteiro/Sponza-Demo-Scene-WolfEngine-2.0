@@ -84,3 +84,8 @@ section.range-slider input:last-of-type::-moz-range-track {
   section.range-slider input[type=range]::-moz-focus-outer {
   border: 0;
 }
+
+select {
+    color: white;
+    background-color: rgba(0, 0, 0, 0.50);
+}

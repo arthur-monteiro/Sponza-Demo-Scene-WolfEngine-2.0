@@ -18,10 +18,18 @@
 				oninput="setSunTheta"
 			></wolf-slider>
 		</div>
+		<div class="card">
+			<div class="card-title">Shadows</div>
+			<wolf-select id="shadows-select" onchange="setShadows">
+				<option value="Shadow Mapping">Shadow Mapping</option>
+				<option value="Ray Tracing">Ray Tracing</option>
+			</wolf-select>			
+		</div>
 	</div>
 	<div class="frameRate" id="frameRate">FPS: 60</div>
 
     <script src="./slider.js"></script>
+    <script src="./select.js"></script>
 	<script type="text/javascript">
 	function updateFrameRate()
 	{

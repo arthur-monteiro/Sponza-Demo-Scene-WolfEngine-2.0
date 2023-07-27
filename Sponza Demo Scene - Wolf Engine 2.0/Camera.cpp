@@ -14,7 +14,16 @@ Camera::Camera(glm::vec3 position, glm::vec3 target, glm::vec3 verticalAxis, flo
 
 void Camera::update(GLFWwindow* window)
 {
-	if (m_oldMousePosX < 0 || m_fixed)
+	if (m_overrideViewMatrices)
+		return;
+
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS && m_oldEscapeState == GLFW_RELEASE)
+	{
+		m_locked = !m_locked;
+	}
+	m_oldEscapeState = glfwGetKey(window, GLFW_KEY_ESCAPE);
+
+	if (m_oldMousePosX < 0 || m_locked)
 	{
 		glfwGetCursorPos(window, &m_oldMousePosX, &m_oldMousePosY);
 		return;
@@ -55,16 +64,18 @@ void Camera::update(GLFWwindow* window)
 		m_target = m_position + m_orientation;
 	}
 
-	/*if (previousPos != m_position)
-		std::cout << "x : " << m_position.x << " y : " << m_position.y << " z : " << m_position.z << std::endl;*/
-	previousPos = m_position;
+	m_previousViewMatrix = m_viewMatrix;
+	m_viewMatrix = glm::lookAt(m_position, m_target, m_verticalAxis);
 }
 
 glm::mat4 Camera::getViewMatrix() const
 {
-	return glm::lookAt(m_position, m_target, m_verticalAxis);
+	return m_viewMatrix;
+}
 
-	//return glm::lookAt(m_position, glm::normalize(m_position + forceOrientation), m_verticalAxis);
+glm::mat4 Camera::getPreviousViewMatrix() const
+{
+	return m_previousViewMatrix;
 }
 
 glm::vec3 Camera::getPosition() const
@@ -74,6 +85,9 @@ glm::vec3 Camera::getPosition() const
 
 glm::mat4 Camera::getProjection() const
 {
+	if (m_overrideViewMatrices)
+		return m_overridenProjectionMatrix;
+
 	glm::mat4 r = glm::perspective(m_radFOV, m_aspect, m_near, m_far);
 	r[1][1] *= -1;
 
@@ -115,6 +129,15 @@ void Camera::setTarget(glm::vec3 target)
 		if (m_orientation.z < 0)
 			m_theta *= -1;
 	}
+}
+
+void Camera::overrideMatrices(const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix)
+{
+	m_viewMatrix = viewMatrix;
+	m_previousViewMatrix = viewMatrix;
+	m_overridenProjectionMatrix = projectionMatrix;
+
+	m_overrideViewMatrices = true;
 }
 
 void Camera::updateOrientation(int xOffset, int yOffset)

@@ -5,9 +5,9 @@
 
 #include <Attachment.h>
 #include <CameraInterface.h>
+#include <DebugMarker.h>
 #include <DescriptorSetGenerator.h>
 #include <Image.h>
-#include <ImageFileLoader.h>
 #include <FrameBuffer.h>
 #include <ObjLoader.h>
 #include <Timer.h>
@@ -15,17 +15,16 @@
 #include "DepthPass.h"
 #include "GameContext.h"
 #include "ShadowMaskComputePass.h"
+#include "SceneElements.h"
 #include "Vertex2DTextured.h"
 
 using namespace Wolf;
 
-ForwardPass::ForwardPass(const Wolf::Mesh* sponzaMesh, std::vector<Wolf::Image*> images, DepthPass* preDepthPass, ShadowMaskComputePass* shadowMaskComputePass)
+ForwardPass::ForwardPass(const SceneElements& sceneElements, DepthPass* preDepthPass, ShadowMaskBasePass* shadowMaskPass) : m_sceneElements(sceneElements)
 {
-	m_sponzaMesh = sponzaMesh;
-	m_sponzaImages = std::move(images);
 	m_preDepthPassSemaphore = preDepthPass->getSemaphore();
 	m_preDepthPass = preDepthPass;
-	m_shadowMaskComputePass = shadowMaskComputePass;
+	m_shadowMaskPass = shadowMaskPass;
 }
 
 void ForwardPass::initializeResources(const InitializationContext& context)
@@ -49,47 +48,31 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 		m_frameBuffers[i].reset(new Framebuffer(m_renderPass->getRenderPass(), { depth, color }));
 	}
 
-	m_signalSemaphore.reset(new Semaphore(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
+	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
 
-	DescriptorSetLayoutGenerator descriptorSetLayoutGenerator;
-	descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT,                                0); // matrices
-	descriptorSetLayoutGenerator.addSampler(VK_SHADER_STAGE_FRAGMENT_BIT,                                    1);
-	descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT,   2, m_sponzaImages.size());
-	descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_FRAGMENT_BIT,                               3);
-	descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_FRAGMENT_BIT,                              4); // light ub
-	m_descriptorSetLayout.reset(new DescriptorSetLayout(descriptorSetLayoutGenerator.getDescriptorLayouts()));
+	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT,                              0); // matrices
+	m_descriptorSetLayoutGenerator.addSampler(VK_SHADER_STAGE_FRAGMENT_BIT,                                  1);
+	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 2, m_sceneElements.getImageCount());
+	m_descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_FRAGMENT_BIT,                             3);
+	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_FRAGMENT_BIT,                            4); // light ub
+	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 5, 1); // depth buffer
+	m_descriptorSetLayout.reset(new DescriptorSetLayout(m_descriptorSetLayoutGenerator.getDescriptorLayouts()));
 
-	m_vertexShaderParser.reset(new ShaderParser("Shaders/shader.vert", { "COMPUTE_SHADOWS" }));
-	m_fragmentShaderParser.reset(new ShaderParser("Shaders/shader.frag"));
+	m_vertexShaderParser.reset(new ShaderParser("Shaders/shader.vert"));
+
+	std::vector<std::string> conditionalBlocks;
+	m_shadowMaskPass->getConditionalBlocksToEnableWhenReadingMask(conditionalBlocks);
+	m_fragmentShaderParser.reset(new ShaderParser("Shaders/shader.frag", conditionalBlocks));
 
 	m_userInterfaceVertexShaderParser.reset(new ShaderParser("Shaders/UI.vert"));
 	m_userInterfaceFragmentShaderParser.reset(new ShaderParser("Shaders/UI.frag"));
 
-	// Sponza resources
+	// Object resources
 	{
-		m_sampler.reset(new Sampler(VK_SAMPLER_ADDRESS_MODE_REPEAT, m_sponzaImages[0]->getMipLevelCount(), VK_FILTER_LINEAR));
+		m_sampler.reset(new Sampler(VK_SAMPLER_ADDRESS_MODE_REPEAT, 11, VK_FILTER_LINEAR));
+		m_lightUniformBuffer.reset(new Buffer(sizeof(LightUBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::NEVER));
 
-		m_mvpUniformBuffer.reset(new Buffer(sizeof(MatricesUBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
-		m_lightUniformBuffer.reset(new Buffer(sizeof(LightUBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
-
-		DescriptorSetGenerator descriptorSetGenerator(descriptorSetLayoutGenerator.getDescriptorLayouts());
-		descriptorSetGenerator.setBuffer(0, *m_mvpUniformBuffer.get());
-		descriptorSetGenerator.setSampler(1, *m_sampler.get());
-		std::vector<DescriptorSetGenerator::ImageDescription> sponzaImageDescriptions(m_sponzaImages.size());
-		for (uint32_t i = 0; i < m_sponzaImages.size(); ++i)
-		{
-			sponzaImageDescriptions[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			sponzaImageDescriptions[i].imageView = m_sponzaImages[i]->getDefaultImageView();
-		}
-		descriptorSetGenerator.setImages(2, sponzaImageDescriptions);
-		DescriptorSetGenerator::ImageDescription shadowMaskDesc;
-		shadowMaskDesc.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-		shadowMaskDesc.imageView = m_shadowMaskComputePass->getOutput()->getDefaultImageView();
-		descriptorSetGenerator.setImage(3, shadowMaskDesc);
-		descriptorSetGenerator.setBuffer(4, *m_lightUniformBuffer.get());
-
-		m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
-		m_descriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
+		createDescriptorSets();
 	}
 
 	// UI resources
@@ -150,26 +133,20 @@ void ForwardPass::resize(const Wolf::InitializationContext& context)
 
 void ForwardPass::record(const Wolf::RecordContext& context)
 {
-	const GameContext* gameContext = (const GameContext*)context.gameContext;
-
-	/* Update */
-	MatricesUBData mvp;
-	constexpr float near = 0.1f;
-	constexpr float far = 100.0f;
-	mvp.projection = context.camera->getProjection();
-	mvp.model = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
-	mvp.view = context.camera->getViewMatrix();
-	m_mvpUniformBuffer->transferCPUMemory((void*)&mvp, sizeof(mvp), 0 /* srcOffet */, context.commandBufferIdx);
+	const GameContext* gameContext = static_cast<const GameContext*>(context.gameContext);
+	uint32_t currentMaskIdx = context.currentFrameIdx % ShadowMaskComputePass::MASK_COUNT;
 
 	LightUBData lightUBData;
 	lightUBData.colorDirectionalLight = gameContext->sunColor;
-	lightUBData.directionDirectionalLight = glm::transpose(glm::inverse(mvp.view)) * glm::vec4(gameContext->sunDirection, 1.0f);
-	m_lightUniformBuffer->transferCPUMemory((void*)&lightUBData, sizeof(lightUBData), 0 /* srcOffet */, context.commandBufferIdx);
+	lightUBData.directionDirectionalLight = glm::transpose(glm::inverse(context.camera->getViewMatrix())) * glm::vec4(gameContext->sunDirection, 1.0f);
+	m_lightUniformBuffer->transferCPUMemory(&lightUBData, sizeof(lightUBData), 0 /* srcOffet */);
 
 	/* Command buffer record */
-	uint32_t frameBufferIdx = context.swapChainImageIdx;
+	const uint32_t frameBufferIdx = context.swapChainImageIdx;
 
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
+
+	DebugMarker::beginRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), DebugMarker::renderPassDebugColor, "Forward pass");
 
 	m_preDepthPass->getOutput()->setImageLayoutWithoutOperation(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL); // at this point, preDepthPass should have set layout with render pass
 	m_preDepthPass->getOutput()->transitionImageLayout(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
@@ -182,9 +159,10 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipeline());
 
-	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipelineLayout(), 0, 1,
+		m_descriptorSets[currentMaskIdx]->getDescriptorSet(), 0, nullptr);
 
-	m_sponzaMesh->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+	m_sceneElements.drawMeshes(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
 	/* UI */
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_userInterfacePipeline->getPipeline());
@@ -194,13 +172,15 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 
 	m_renderPass->endRenderPass(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
+	DebugMarker::endRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+
 	m_commandBuffer->endCommandBuffer(context.commandBufferIdx);
 }
 
 void ForwardPass::submit(const Wolf::SubmitContext& context)
 {
-	std::vector<const Semaphore*> waitSemaphores{ m_shadowMaskComputePass->getSemaphore()};
-	std::vector<VkSemaphore> signalSemaphores{ m_signalSemaphore->getSemaphore() };
+	const std::vector waitSemaphores{ m_shadowMaskPass->getSemaphore() };
+	const std::vector signalSemaphores{ m_semaphore->getSemaphore() };
 	m_commandBuffer->submit(context.commandBufferIdx, waitSemaphores, signalSemaphores, context.frameFence);
 
 	bool anyShaderModified = m_vertexShaderParser->compileIfFileHasBeenModified();
@@ -212,6 +192,12 @@ void ForwardPass::submit(const Wolf::SubmitContext& context)
 		vkDeviceWaitIdle(context.device);
 		createPipelines(m_swapChainWidth, m_swapChainHeight);
 	}
+}
+
+void ForwardPass::setShadowMaskPass(ShadowMaskBasePass* shadowMaskPass)
+{
+	m_shadowMaskPass = shadowMaskPass;
+	createDescriptorSets();
 }
 
 void ForwardPass::createPipelines(uint32_t width, uint32_t height)
@@ -237,12 +223,12 @@ void ForwardPass::createPipelines(uint32_t width, uint32_t height)
 
 		// IA
 		std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
-		Wolf::Vertex3D::getAttributeDescriptions(attributeDescriptions, 0);
+		Vertex3D::getAttributeDescriptions(attributeDescriptions, 0);
 		pipelineCreateInfo.vertexInputAttributeDescriptions = attributeDescriptions;
 
 		std::vector<VkVertexInputBindingDescription> bindingDescriptions(1);
 		bindingDescriptions[0] = {};
-		Wolf::Vertex3D::getBindingDescription(bindingDescriptions[0], 0);
+		Vertex3D::getBindingDescription(bindingDescriptions[0], 0);
 		pipelineCreateInfo.vertexInputBindingDescriptions = bindingDescriptions;
 
 		// Resources
@@ -259,6 +245,8 @@ void ForwardPass::createPipelines(uint32_t width, uint32_t height)
 		// Depth testing
 		pipelineCreateInfo.enableDepthWrite = VK_FALSE;
 		pipelineCreateInfo.depthCompareOp = VK_COMPARE_OP_EQUAL;
+
+		pipelineCreateInfo.cullMode = VK_CULL_MODE_NONE;
 
 		m_pipeline.reset(new Pipeline(pipelineCreateInfo));
 	}
@@ -304,11 +292,42 @@ void ForwardPass::createPipelines(uint32_t width, uint32_t height)
 		pipelineCreateInfo.blendModes = blendModes;
 
 		m_userInterfacePipeline.reset(new Pipeline(pipelineCreateInfo));
-
-		// Depth testing
-		pipelineCreateInfo.enableDepthTesting = VK_FALSE;
 	}
 
 	m_swapChainWidth = width;
 	m_swapChainHeight = height;
+}
+
+void ForwardPass::createDescriptorSets()
+{
+	DescriptorSetGenerator descriptorSetGenerator(m_descriptorSetLayoutGenerator.getDescriptorLayouts());
+	descriptorSetGenerator.setBuffer(0, m_sceneElements.getMatricesUB());
+	descriptorSetGenerator.setSampler(1, *m_sampler);
+
+	std::vector<DescriptorSetGenerator::ImageDescription> imageDescriptions;
+	for (uint32_t i = 0; i < m_sceneElements.getImageCount(); ++i)
+	{
+		imageDescriptions.resize(imageDescriptions.size() + 1);
+		imageDescriptions.back().imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		imageDescriptions.back().imageView = m_sceneElements.getImageView(i);
+	}
+	descriptorSetGenerator.setImages(2, imageDescriptions);
+	DescriptorSetGenerator::ImageDescription shadowMaskDesc;
+	descriptorSetGenerator.setBuffer(4, *m_lightUniformBuffer);
+
+	DescriptorSetGenerator::ImageDescription depthBufferDescription;
+	depthBufferDescription.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	depthBufferDescription.imageView = m_preDepthPass->getCopy()->getDefaultImageView();
+	descriptorSetGenerator.setImages(5, { depthBufferDescription });
+
+	for (uint32_t i = 0; i < ShadowMaskComputePass::MASK_COUNT; ++i)
+	{
+		shadowMaskDesc.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		shadowMaskDesc.imageView = m_shadowMaskPass->getOutput(i)->getDefaultImageView();
+		descriptorSetGenerator.setImage(3, shadowMaskDesc);
+
+		if (!m_descriptorSets[i])
+			m_descriptorSets[i].reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
+		m_descriptorSets[i]->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
+	}
 }

@@ -1,9 +1,10 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
+const uint MAX_MODELS = 2;
 layout(binding = 0) uniform UniformBufferMVP
 {
-    mat4 model;
+    mat4 models[MAX_MODELS];
 	mat4 view;
 	mat4 projection;
 } ubMVP;
@@ -33,11 +34,13 @@ const mat4 biasMat = mat4(
 
 void main() 
 {
-	vec4 viewPos = ubMVP.view * ubMVP.model * vec4(inPosition, 1.0);
+	uint modelIdx = inMaterialID >= 24 ? 1 : 0;
+
+	vec4 viewPos = ubMVP.view * ubMVP.models[modelIdx] * vec4(inPosition, 1.0);
 
     gl_Position = ubMVP.projection * viewPos;
 
-	mat3 usedModelMatrix = transpose(inverse(mat3(ubMVP.view * ubMVP.model)));
+	mat3 usedModelMatrix = transpose(inverse(mat3(ubMVP.view * ubMVP.models[modelIdx])));
     vec3 n = normalize(usedModelMatrix * inNormal);
 	vec3 t = normalize(usedModelMatrix * inTangent);
 	t = normalize(t - dot(t, n) * n);

@@ -10,10 +10,12 @@
 #include <ShaderParser.h>
 
 #include "CascadedShadowMapping.h"
+#include "ShadowMaskBasePass.h"
 
 class DepthPass;
+class SharedGPUResources;
 
-class ShadowMaskComputePass : public Wolf::CommandRecordBase
+class ShadowMaskComputePass : public Wolf::CommandRecordBase, public ShadowMaskBasePass
 {
 public:
 	ShadowMaskComputePass(DepthPass* preDepthPass, CascadedShadowMapping* csmManager);
@@ -23,37 +25,39 @@ public:
 	void record(const Wolf::RecordContext& context) override;
 	void submit(const Wolf::SubmitContext& context) override;
 
-	Wolf::Image* getOutput() { return m_outputMask.get(); }
+	Wolf::Image* getOutput(uint32_t frameIdx) override { return m_outputMasks[frameIdx % MASK_COUNT].get(); }
+	const Wolf::Semaphore* getSemaphore() const override { return Wolf::CommandRecordBase::getSemaphore(); }
+	void getConditionalBlocksToEnableWhenReadingMask(std::vector<std::string>& conditionalBlocks) const override {}
 
 private:
-	void createOutputImage(uint32_t width, uint32_t height);
+	void createOutputImages(uint32_t width, uint32_t height);
 	void createPipeline();
-	void updateDescriptorSet(const Wolf::InitializationContext& context);
+	void updateDescriptorSet() const;
 
-	float jitter();
+	static float jitter();
 
 private:
 	/* Pipeline */
 	std::unique_ptr<Wolf::ShaderParser> m_computeShaderParser;
 	std::unique_ptr<Wolf::Pipeline> m_pipeline;
-	std::unique_ptr<Wolf::Image> m_outputMask;
+	std::array<std::unique_ptr<Wolf::Image>, MASK_COUNT> m_outputMasks;
 
 	/* Resources */
 	Wolf::DescriptorSetLayoutGenerator m_descriptorSetLayoutGenerator;
 	std::unique_ptr<Wolf::DescriptorSetLayout> m_descriptorSetLayout;
-	std::unique_ptr<Wolf::DescriptorSet> m_descriptorSet;
-
-	static constexpr uint32_t NOISE_TEXTURE_SIZE_PER_SIDE = 128;
-	static constexpr uint32_t NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE = 4;
+	std::array<std::unique_ptr<Wolf::DescriptorSet>, MASK_COUNT> m_descriptorSets;
+	std::array<float, 16> m_noiseRotations;
 	DepthPass* m_preDepthPass;
 	CascadedShadowMapping* m_csmManager;
 	struct ShadowUBData
 	{
-		glm::mat4 invModelView;
+		glm::mat4 invView;
 
 		glm::mat4 invProjection;
 
 		glm::vec4 projectionParams;
+
+		glm::mat4 previousMVPMatrix;
 
 		glm::uvec2 screenSize;
 		glm::vec2 padding;
@@ -70,6 +74,10 @@ private:
 	};
 	std::unique_ptr<Wolf::Buffer> m_uniformBuffer;
 	std::unique_ptr<Wolf::Sampler> m_shadowMapsSampler;
+
+	// Noise
+	static constexpr uint32_t NOISE_TEXTURE_SIZE_PER_SIDE = 128;
+	static constexpr uint32_t NOISE_TEXTURE_PATTERN_SIZE_PER_SIDE = 4;
 	std::unique_ptr<Wolf::Image> m_noiseImage;
 	std::unique_ptr<Wolf::Sampler> m_noiseSampler;
 };

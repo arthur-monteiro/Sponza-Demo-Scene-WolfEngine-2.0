@@ -1,3 +1,7 @@
+* {
+	-webkit-user-select: none;
+}
+
 .frameRate {
     font-size: 40px;
     position: fixed; 

@@ -5,7 +5,10 @@
 struct GameContext
 {
 	glm::vec3 sunDirection;
+	float sunPhi, sunTheta;
 	glm::vec3 sunColor;
+
+	bool shadowmapScreenshotsRequested;
 
 	GameContext(const glm::vec3& defaultSunDirection, const glm::vec3& defaultSunColor)
 	{

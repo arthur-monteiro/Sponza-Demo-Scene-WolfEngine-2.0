@@ -17,17 +17,18 @@
 #include <Sampler.h>
 #include <ShaderParser.h>
 
+class SceneElements;
 class DepthPass;
 
 class CascadeDepthPass : public Wolf::DepthPassBase
 {
 public:
-	CascadeDepthPass(const Wolf::InitializationContext& context, const Wolf::Mesh* sponzaMesh, uint32_t width, uint32_t height, const Wolf::CommandBuffer* commandBuffer, VkDescriptorSetLayout descriptorSetLayout,
+	CascadeDepthPass(const Wolf::InitializationContext& context, const SceneElements& sceneElements, uint32_t width, uint32_t height, const Wolf::CommandBuffer* commandBuffer, VkDescriptorSetLayout descriptorSetLayout,
 		const Wolf::ShaderParser* vertexShaderParser, const Wolf::DescriptorSetLayoutGenerator& descriptorSetLayoutGenerator);
 	CascadeDepthPass(const CascadeDepthPass&) = delete;
 
-	void getMVP(glm::mat4& output) { output = m_mvpData.mvp; }
-	void setMVP(const glm::mat4& mvp);
+	void getViewProjMatrix(glm::mat4& output) const { output = m_viewProjMatrix; }
+	void setMVP(const glm::mat4& view, const glm::mat4& projection);
 	void shaderChanged();
 
 private:
@@ -46,16 +47,18 @@ private:
 	VkDescriptorSetLayout m_descriptorSetLayout;
 	const Wolf::ShaderParser* m_vertexShaderParser;
 	const Wolf::CommandBuffer* m_commandBuffer;
-	const Wolf::Mesh* m_sponzaMesh;
+	const SceneElements& m_sceneElements;
 
 	/* Owned resources */
 	std::unique_ptr<Wolf::Pipeline> m_pipeline;
 	uint32_t m_width, m_height;
+	static constexpr uint32_t MAX_MODELS = 2;
 	struct UBData
 	{
-		glm::mat4 mvp;
+		glm::mat4 mvp[MAX_MODELS];
 	};
 	UBData m_mvpData;
+	glm::mat4 m_viewProjMatrix;
 	std::unique_ptr<Wolf::Buffer> m_uniformBuffer;
 	std::unique_ptr<Wolf::DescriptorSet> m_descriptorSet;
 };
@@ -65,17 +68,17 @@ class CascadedShadowMapping : public Wolf::CommandRecordBase
 public:
 	static constexpr int CASCADE_COUNT = 4;
 
-	CascadedShadowMapping(const Wolf::Mesh* sponzaMesh);
+	CascadedShadowMapping(const SceneElements& sceneElements);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
 	void record(const Wolf::RecordContext& context) override;
 	void submit(const Wolf::SubmitContext& context) override;
 
-	Wolf::Image* getShadowMap(uint32_t cascadeIdx) { return m_cascadeDepthPasses[cascadeIdx]->getOutput(); }
+	Wolf::Image* getShadowMap(uint32_t cascadeIdx) const { return m_cascadeDepthPasses[cascadeIdx]->getOutput(); }
 	float getCascadeSplit(uint32_t cascadeIdx) const { return m_cascadeSplits[cascadeIdx]; }
-	void getCascadeMatrix(uint32_t cascadeIdx, glm::mat4& output) { m_cascadeDepthPasses[cascadeIdx]->getMVP(output); }
-	uint32_t getCascadeTextureSize(uint32_t cascadeIdx) { return m_cascadeTextureSize[cascadeIdx]; }
+	void getCascadeMatrix(uint32_t cascadeIdx, glm::mat4& output) const { m_cascadeDepthPasses[cascadeIdx]->getViewProjMatrix(output); }
+	uint32_t getCascadeTextureSize(uint32_t cascadeIdx) const { return m_cascadeTextureSize[cascadeIdx]; }
 
 private:
 	/* Pipeline */
@@ -83,11 +86,11 @@ private:
 	std::unique_ptr<Wolf::Pipeline> m_pipeline;
 
 	/* Resources*/
-	const Wolf::Mesh* m_sponzaMesh;
+	const SceneElements& m_sceneElements;
 	std::unique_ptr<Wolf::DescriptorSetLayout> m_descriptorSetLayout;
 
 	/* Cascades */
-	uint32_t m_cascadeTextureSize[CASCADE_COUNT] = { 2048, 1024, 1024, 512 };
+	uint32_t m_cascadeTextureSize[CASCADE_COUNT] = { 6144, 6144, 6144, 6144 };
 	std::array<std::unique_ptr<CascadeDepthPass>, CASCADE_COUNT> m_cascadeDepthPasses;
 	std::array<float, CASCADE_COUNT> m_cascadeSplits;
 };

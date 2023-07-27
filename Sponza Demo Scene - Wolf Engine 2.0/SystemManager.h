@@ -1,10 +1,11 @@
 #pragma once
 
+#define _USE_MATH_DEFINES
+#include <math.h>
 #include <WolfEngine.h>
 
 #include "GameContext.h"
 #include "LoadingScreenUniquePass.h"
-#include "SponzaModel.h"
 #include "SponzaScene.h"
 
 enum class GAME_STATE
@@ -25,6 +26,8 @@ private:
 
 	static void debugCallback(Wolf::Debug::Severity severity, Wolf::Debug::Type type, std::string message);
 	ultralight::JSValue getFrameRate(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
+	void setSunTheta(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
+	void setSunPhi(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
 
 private:
 	std::unique_ptr<Wolf::WolfEngine> m_wolfInstance;
@@ -42,5 +45,7 @@ private:
 	std::chrono::steady_clock::time_point m_startTimeFPSCounter = std::chrono::steady_clock::now();
 
 	std::vector<GameContext> m_gameContexts;
+
+	double m_sunTheta = M_PI, m_sunPhi = M_PI_2;
 };
 

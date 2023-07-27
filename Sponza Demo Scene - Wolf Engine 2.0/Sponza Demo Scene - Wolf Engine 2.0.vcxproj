@@ -135,10 +135,14 @@
     <ClCompile Include="CascadedShadowMapping.cpp" />
     <ClCompile Include="DepthPass.cpp" />
     <ClCompile Include="ForwardPass.cpp" />
+    <ClCompile Include="InputHandler.cpp" />
     <ClCompile Include="LoadingScreenUniquePass.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="RayTracedShadowsPass.cpp" />
+    <ClCompile Include="SceneElements.cpp" />
+    <ClCompile Include="ShadowMaskBasePass.cpp" />
     <ClCompile Include="ShadowMaskComputePass.cpp" />
-    <ClCompile Include="SponzaModel.cpp" />
+    <ClCompile Include="ObjectModel.cpp" />
     <ClCompile Include="SponzaScene.cpp" />
     <ClCompile Include="SystemManager.cpp" />
   </ItemGroup>
@@ -148,9 +152,13 @@
     <ClInclude Include="DepthPass.h" />
     <ClInclude Include="ForwardPass.h" />
     <ClInclude Include="GameContext.h" />
+    <ClInclude Include="InputHandler.h" />
     <ClInclude Include="LoadingScreenUniquePass.h" />
+    <ClInclude Include="RayTracedShadowsPass.h" />
+    <ClInclude Include="SceneElements.h" />
+    <ClInclude Include="ShadowMaskBasePass.h" />
     <ClInclude Include="ShadowMaskComputePass.h" />
-    <ClInclude Include="SponzaModel.h" />
+    <ClInclude Include="ObjectModel.h" />
     <ClInclude Include="SponzaScene.h" />
     <ClInclude Include="SystemManager.h" />
     <ClInclude Include="Vertex2DTextured.h" />

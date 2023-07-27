@@ -5,11 +5,14 @@
 #include <ObjLoader.h>
 #include <Timer.h>
 
+#include "ObjectModel.h"
+#include "SceneElements.h"
+
 using namespace Wolf;
 
-DepthPass::DepthPass(const Wolf::Mesh* sponzaMesh)
+DepthPass::DepthPass(const SceneElements& sceneElements, bool copyOutput) : m_sceneElements(sceneElements), m_copyOutput(copyOutput)
 {
-	m_sponzaMesh = sponzaMesh;
+
 }
 
 void DepthPass::initializeResources(const Wolf::InitializationContext& context)
@@ -21,7 +24,7 @@ void DepthPass::initializeResources(const Wolf::InitializationContext& context)
 	m_vertexShaderParser.reset(new ShaderParser("Shaders/shader.vert"));
 
 	m_commandBuffer.reset(new CommandBuffer(QueueType::GRAPHIC, false /* isTransient */));
-	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
+	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT));
 
 	DescriptorSetLayoutGenerator descriptorSetLayoutGenerator;
 	descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT, 0);
@@ -29,18 +32,18 @@ void DepthPass::initializeResources(const Wolf::InitializationContext& context)
 
 	// Sponza resources
 	{
-		m_uniformBuffer.reset(new Buffer(sizeof(UBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
-
 		DescriptorSetGenerator descriptorSetGenerator(descriptorSetLayoutGenerator.getDescriptorLayouts());
-		descriptorSetGenerator.setBuffer(0, *m_uniformBuffer.get());
+		descriptorSetGenerator.setBuffer(0, m_sceneElements.getMatricesUB());
 
-		m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
+		m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
 		m_descriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
 	}
 
 	DepthPassBase::initializeResources(context);
 
 	createPipeline();
+
+	createCopyImage(context.depthFormat);
 }
 
 void DepthPass::resize(const Wolf::InitializationContext& context)
@@ -51,23 +54,36 @@ void DepthPass::resize(const Wolf::InitializationContext& context)
 	DepthPassBase::resize(context);
 
 	createPipeline();
+
+	createCopyImage(context.depthFormat);
 }
 
 void DepthPass::record(const Wolf::RecordContext& context)
 {
-	/* Update */
-	UBData mvp;
-	constexpr float near = 0.1f;
-	constexpr float far = 100.0f;
-	mvp.projection = context.camera->getProjection();
-	mvp.model = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
-	mvp.view = context.camera->getViewMatrix();
-	m_uniformBuffer->transferCPUMemory((void*)&mvp, sizeof(mvp), 0 /* srcOffet */ , context.commandBufferIdx);
-
 	/* Command buffer record */
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
 
 	DepthPassBase::record(context);
+
+	VkImageCopy copyRegion{};
+
+	copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	copyRegion.srcSubresource.baseArrayLayer = 0;
+	copyRegion.srcSubresource.mipLevel = 0;
+	copyRegion.srcSubresource.layerCount = 1;
+	copyRegion.srcOffset = { 0, 0, 0 };
+
+	copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	copyRegion.dstSubresource.baseArrayLayer = 0;
+	copyRegion.dstSubresource.mipLevel = 0;
+	copyRegion.dstSubresource.layerCount = 1;
+	copyRegion.dstOffset = { 0, 0, 0 };
+
+	copyRegion.extent = m_copyImage->getExtent();
+
+	m_depthImage->setImageLayoutWithoutOperation(getFinalLayout()); // at this point, preDepthPass should have set layout with render pass
+	m_copyImage->recordCopyGPUImage(*m_depthImage, copyRegion, m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+	m_depthImage->transitionImageLayout(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 	m_commandBuffer->endCommandBuffer(context.commandBufferIdx);
 }
@@ -120,12 +136,25 @@ void DepthPass::createPipeline()
 	m_pipeline.reset(new Pipeline(pipelineCreateInfo));
 }
 
+void DepthPass::createCopyImage(VkFormat format)
+{
+	CreateImageInfo depthCopyImageCreateInfo;
+	depthCopyImageCreateInfo.format = format;
+	depthCopyImageCreateInfo.extent.width = getWidth();
+	depthCopyImageCreateInfo.extent.height = getHeight();
+	depthCopyImageCreateInfo.extent.depth = 1;
+	depthCopyImageCreateInfo.mipLevelCount = 1;
+	depthCopyImageCreateInfo.aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+	depthCopyImageCreateInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	m_copyImage.reset(new Image(depthCopyImageCreateInfo));
+}
+
 void DepthPass::recordDraws(const RecordContext& context)
 {
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipeline());
-	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSet->getDescriptorSet(), 0, nullptr);
 
-	m_sponzaMesh->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+	m_sceneElements.drawMeshes(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 }
 
 VkCommandBuffer DepthPass::getCommandBuffer(const RecordContext& context)

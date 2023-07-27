@@ -11,7 +11,6 @@
 #include <GLFW/glfw3.h>
 
 #include <chrono>
-#include <iostream>
 
 #include <CameraInterface.h>
 
@@ -23,6 +22,7 @@ public:
 	void update(GLFWwindow* window) override;
 
 	glm::mat4 getViewMatrix() const override;
+	glm::mat4 getPreviousViewMatrix() const override;
 	glm::mat4 getProjection() const override;
 	glm::vec3 getPosition() const override;
 	float getNear() const override { return m_near; }
@@ -33,8 +33,10 @@ public:
 
 	void setPosition(glm::vec3 position);
 	void setTarget(glm::vec3 target);
-	void setFixed(bool value) { m_fixed = value; }
+	void setFixed(bool value) { m_locked = value; }
 	void setAspect(float aspect) { m_aspect = aspect; }
+
+	void overrideMatrices(const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix);
 
 private:
 	void updateOrientation(int xOffset, int yOffset);
@@ -57,12 +59,18 @@ private:
 	double m_oldMousePosY = -1;
 
 	const float OFFSET_ANGLES = 0.01f;
-	bool m_fixed = false;
+	bool m_locked = false;
 
 	float m_aspect;
 	float m_near = 0.1f;
 	float m_far = 50.0f;
 	float m_radFOV = glm::radians(45.0f);
 
-	glm::vec3 previousPos;
+	glm::mat4 m_viewMatrix;
+	glm::mat4 m_previousViewMatrix;
+
+	int m_oldEscapeState = 0;
+
+	bool m_overrideViewMatrices = false;
+	glm::mat4 m_overridenProjectionMatrix;
 };

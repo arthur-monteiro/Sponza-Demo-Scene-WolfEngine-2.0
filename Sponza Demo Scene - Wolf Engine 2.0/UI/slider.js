@@ -37,10 +37,10 @@ class WolfSlider extends HTMLElement {
         const el = document.createElement("input");
         Object.assign(el, props);
         el.setAttribute("value", value);
-        el.addEventListener('input', () => {
+        el.addEventListener('change', () => {
             this.values[key] = Number(el.value);
             this.querySelector('div').innerHTML=`${this.values}`;
-            window[this.getAttribute('oninput')](this.values.length == 1 ? this.values[0] : this.values);
+            window[this.getAttribute('onchange')](this.values.length == 1 ? this.values[0] : this.values);
         })
         return el;
     }

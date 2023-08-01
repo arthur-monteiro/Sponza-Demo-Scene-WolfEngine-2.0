@@ -19,6 +19,15 @@
 			></wolf-slider>
 		</div>
 		<div class="card">
+			<div class="card-title">Sun Area Angle</div>
+			<wolf-slider
+				max="180"
+				min="0.01"
+				step="0.01"
+				onchange="setSunAreaAngle"
+			></wolf-slider>
+		</div>
+		<div class="card">
 			<div class="card-title">Shadows</div>
 			<wolf-select id="shadows-select" onchange="setShadows">
 				<option value="Shadow Mapping">Shadow Mapping</option>

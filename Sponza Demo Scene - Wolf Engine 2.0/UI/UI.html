@@ -49,6 +49,11 @@
 			updateFrameRate();
 		}, 1000);
 	}
+
+	function setVisibility(show)
+	{
+		document.getElementById('menu').style.display = show ? 'block' : 'none' ;
+	}
 	
 	window.addEventListener('DOMContentLoaded', (event) => 
 	{

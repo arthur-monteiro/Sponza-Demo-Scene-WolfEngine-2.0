@@ -12,6 +12,7 @@ layout(binding = 3, set = 0) uniform UniformBuffer
 	vec4 projectionParams;
     vec4 sunDirectionAndNoiseIndex;
     uint drawWithoutNoiseFrameIndex;
+    float sunAreaAngle;
 } ub;
 layout(binding = 4) uniform sampler3D noiseTexture;
 layout(location = 0) rayPayloadEXT bool isShadowed;
@@ -51,12 +52,7 @@ void main()
         isShadowed = true;
 
         vec3 noiseDir = (texture(noiseTexture, vec3((gl_LaunchIDEXT.xy) / float(NOISE_TEXTURE_SIZE_PER_SIDE), float(ub.sunDirectionAndNoiseIndex.w) / float(NOISE_TEXTURE_VECTOR_COUNT))).rgb);
-
-        //mat3 rotation = mat3(cos(ub.sunDirectionAndNoiseRotation.z), 0, sin(ub.sunDirectionAndNoiseRotation.z),
-        //                     0, 1, 0,
-        //                     -sin(ub.sunDirectionAndNoiseRotation.z), 0, cos(ub.sunDirectionAndNoiseRotation.z));
-
-        noiseDir *= 0.01f;
+        noiseDir *= ub.sunAreaAngle;
 
         vec3 direction = normalize(ub.sunDirectionAndNoiseIndex.xyz) + noiseDir;
         traceRayEXT(topLevelAS, rayFlags, cullMask, 0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/, origin.xyz, tmin, direction, tmax, 0 /*payload*/);

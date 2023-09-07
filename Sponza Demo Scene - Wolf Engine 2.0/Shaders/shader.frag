@@ -8,7 +8,8 @@ layout (location = 0) in vec3 inViewPos;
 layout (location = 1) in vec2 inTexCoords;
 layout (location = 2) flat in uint inMaterialID;
 layout (location = 3) in mat3 inTBN;
-layout (location = 6) in vec3 inRawPosition;
+layout (location = 6) in vec3 inWorldSpaceNormal;
+layout (location = 7) in vec3 inWorldSpacePos;
 
 layout (binding = 1) uniform sampler textureSampler;
 layout (binding = 2) uniform texture2D[] textures;
@@ -17,10 +18,15 @@ layout (binding = 3, r32f) uniform image2D shadowMask;
 layout(binding = 4, std140) uniform readonly UniformBufferLighting
 {
 	vec3 directionDirectionalLight;
+
 	vec3 colorDirectionalLight;
+
     uvec2 outputSize;
     float near;
     float far;
+
+    mat4 invView;
+    mat4 invProjection;
 } ubLighting;
 
 #if RAYTRACED_SHADOWS
@@ -57,7 +63,7 @@ void main()
     normal = normalize(normal);
 
 #if RAYTRACED_SHADOWS
-    float shadow = computeShadows(normal);
+    float shadow = computeShadows();
 #else
 	float shadow = imageLoad(shadowMask, ivec2(gl_FragCoord.xy)).r;
 #endif
@@ -101,7 +107,24 @@ void main()
 	//color = vec3(1.0) - exp(-color * 0.5);
     color = pow(color, vec3(1.0 / 2.2));
 
-	outColor = vec4(color, 1.0);
+    //vec3 viewPos_2 = viewPosFromDepth(gl_FragCoord.xy / vec2(ubLighting.outputSize));
+    //vec3 worldPos_2 = (ubLighting.invView * vec4(viewPos_2, 1.0f)).xyz;
+
+    /*vec3 currentViewPos = inViewPos;
+
+    vec2 uv = vec2((gl_FragCoord.x + 1) / float(ubLighting.outputSize.x), (gl_FragCoord.y + 1) / float(ubLighting.outputSize.y));
+    vec2 d = 2.0f * uv - 1.0f;
+    vec4 viewRay = ubLighting.invProjection * vec4(d.xy, 1.0, 1.0);
+
+    vec3 viewDir = normalize(viewRay.xyz);
+
+    float denom = dot(normalize(transpose(inTBN)[2]), viewDir.xyz);
+
+    float t = dot((currentViewPos), normalize(transpose(inTBN)[2])) / denom;
+    vec3 newViewPos = viewDir * t;
+    
+    outColor = vec4(abs(currentViewPos - newViewPos) * 1000.0, 1.0);*/
+    outColor = vec4(color, 1.0);
 }
 
 float DistributionGGX(vec3 N, vec3 H, float roughness)

@@ -76,6 +76,10 @@ private:
 		glm::uvec2 outputSize;
 		float near;
 		float far;
+
+		glm::mat4 invView;
+
+		glm::mat4 invProjection;
 	};
 	std::unique_ptr<Wolf::Buffer> m_lightUniformBuffer;
 

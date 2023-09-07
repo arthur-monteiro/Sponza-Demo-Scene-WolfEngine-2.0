@@ -68,7 +68,7 @@ float computeShadowOcclusionForCascade(in uint cascadeIndex, in vec4 worldPos, i
 							 sin(ub.noiseRotation), cos(ub.noiseRotation));
 
 		vec2 noise = rotation * (texture(noiseTexture, vec3((gl_GlobalInvocationID.xy) / float(NOISE_TEXTURE_SIZE_PER_SIDE), i / float(NOISE_TEXTURE_PATTERN_PIXEL_COUNT))).rg / ub.cascadeTextureSize[cascadeIndex]);
-		noise *= 3.0f; // replace by distance with occluder
+		noise *= 4.0f; // replace by distance with occluder
 		noise *= getCascadeScale(cascadeIndex);
 
 		float closestDepth = textureGrad(sampler2D(shadowMaps[cascadeIndex], shadowMapsSampler), projCoords.xy + noise, shadowMapDDX, shadowMapDDY).r;

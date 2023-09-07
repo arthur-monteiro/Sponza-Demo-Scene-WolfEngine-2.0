@@ -36,6 +36,7 @@ private:
 	std::array<std::unique_ptr<Wolf::Image>, 5> m_cubeImages;
 	std::unique_ptr<Camera> m_camera;
 	std::unique_ptr<InputHandler> m_inputHandler;
+	bool m_isLocked = false;
 
 	// PreDepth
 	std::unique_ptr<DepthPass> m_depthPass;

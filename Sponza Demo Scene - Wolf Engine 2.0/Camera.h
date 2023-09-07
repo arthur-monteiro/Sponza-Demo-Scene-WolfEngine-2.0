@@ -23,17 +23,15 @@ public:
 
 	glm::mat4 getViewMatrix() const override;
 	glm::mat4 getPreviousViewMatrix() const override;
-	glm::mat4 getProjection() const override;
+	glm::mat4 getProjectionMatrix() const override;
 	glm::vec3 getPosition() const override;
 	float getNear() const override { return m_near; }
 	float getFar() const override { return m_far; }
 	glm::vec3 getOrientation() const override { return m_orientation; }
 	glm::vec3 getTarget() const { return m_target; }
 	float getFOV() const override { return m_radFOV; }
-
-	void setPosition(glm::vec3 position);
-	void setTarget(glm::vec3 target);
-	void setFixed(bool value) { m_locked = value; }
+	
+	void setLocked(bool value) { m_locked = value; }
 	void setAspect(float aspect) { m_aspect = aspect; }
 
 	void overrideMatrices(const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix);
@@ -68,8 +66,6 @@ private:
 
 	glm::mat4 m_viewMatrix;
 	glm::mat4 m_previousViewMatrix;
-
-	int m_oldEscapeState = 0;
 
 	bool m_overrideViewMatrices = false;
 	glm::mat4 m_overridenProjectionMatrix;

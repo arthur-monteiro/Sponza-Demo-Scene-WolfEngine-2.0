@@ -19,7 +19,8 @@ layout(location = 0) out vec3 outViewPos;
 layout(location = 1) out vec2 outTexCoord;
 layout(location = 2) out uint outMaterialID;
 layout(location = 3) out mat3 outTBN;
-layout(location = 6) out vec3 outRawPosition;
+layout(location = 6) out vec3 outWorldSpaceNormal;
+layout(location = 7) out vec3 outWorldSpacePos;
  
 out gl_PerVertex
 {
@@ -50,5 +51,6 @@ void main()
 	outViewPos = viewPos.xyz;
     outTexCoord = inTexCoord;
 	outMaterialID = inMaterialID;
-	outRawPosition = inPosition;
+	outWorldSpaceNormal = normalize(inNormal);
+	outWorldSpacePos =  (ubMVP.models[modelIdx] * vec4(inPosition, 1.0)).xyz;
 } 

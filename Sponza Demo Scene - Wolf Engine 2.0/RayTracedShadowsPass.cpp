@@ -79,7 +79,7 @@ void RayTracedShadowsPass::initializeResources(const InitializationContext& cont
 	m_denoiseSamplingPattern.reset(new Image(denoiseSamplingPatternImageCreateInfo));
 
 	const uint32_t samplingPointCountPerSide = glm::sqrt(DENOISE_TEXTURE_SIZE);
-	constexpr float distanceBetweenSamples = 1.0f;
+	constexpr float distanceBetweenSamples = 0.003f;
 	const float startingSamplePointOffset = -static_cast<int>(samplingPointCountPerSide / 2.0f) * distanceBetweenSamples;
 
 	std::array<glm::vec2, DENOISE_TEXTURE_SIZE> samplingPoints;
@@ -142,7 +142,7 @@ void RayTracedShadowsPass::record(const RecordContext& context)
 				exportPositionsFile << "\nProjection matrix: ";
 				for (uint32_t i = 0; i < 4; ++i)
 					for (uint32_t j = 0; j < 4; ++j)
-						exportPositionsFile << context.camera->getProjection()[i][j] << ";";
+						exportPositionsFile << context.camera->getProjectionMatrix()[i][j] << ";";
 
 				exportPositionsFile << "\nSun phi/theta: ";
 				exportPositionsFile << gameContext->sunPhi << ";" << gameContext->sunTheta;
@@ -157,13 +157,14 @@ void RayTracedShadowsPass::record(const RecordContext& context)
 	/* Update data */
 	ShadowUBData shadowUBData;
 	shadowUBData.invModelView = glm::inverse(context.camera->getViewMatrix());
-	shadowUBData.invProjection = glm::inverse(context.camera->getProjection());
+	shadowUBData.invProjection = glm::inverse(context.camera->getProjectionMatrix());
 	const float near = context.camera->getNear();
 	const float far = context.camera->getFar();
 	shadowUBData.projectionParams.x = far / (far - near);
 	shadowUBData.projectionParams.y = (-far * near) / (far - near);
 	shadowUBData.sunDirectionAndNoiseIndex = glm::vec4(-gameContext->sunDirection, context.currentFrameIdx % NOISE_TEXTURE_VECTOR_COUNT);
 	shadowUBData.drawWithoutNoiseFrameIndex = frameCounter;
+	shadowUBData.sunAreaAngle = gameContext->sunAreaAngle;
 
 	m_uniformBuffer->transferCPUMemory(&shadowUBData, sizeof(shadowUBData), 0 /* srcOffet */, context.commandBufferIdx);
 

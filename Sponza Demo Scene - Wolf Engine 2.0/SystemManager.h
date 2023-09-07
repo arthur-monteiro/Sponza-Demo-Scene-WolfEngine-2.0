@@ -24,11 +24,12 @@ private:
 	void createWolfInstance();
 	void loadSponzaScene();
 
-	static void debugCallback(Wolf::Debug::Severity severity, Wolf::Debug::Type type, std::string message);
+	static void debugCallback(Wolf::Debug::Severity severity, Wolf::Debug::Type type, const std::string& message);
 	ultralight::JSValue getFrameRate(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
 	void setSunTheta(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
 	void setSunPhi(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
 	void setShadows(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
+	void setSunAreaAngle(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
 
 private:
 	std::unique_ptr<Wolf::WolfEngine> m_wolfInstance;
@@ -47,6 +48,7 @@ private:
 
 	std::vector<GameContext> m_gameContexts;
 
-	double m_sunTheta = M_PI, m_sunPhi = M_PI_2;
+	double m_sunTheta = 0.0, m_sunPhi = 0.0;
+	double m_sunAreaAngle = 0.01;
 };
 

@@ -119,6 +119,7 @@ void ForwardPass::resize(const Wolf::InitializationContext& context)
 	}
 
 	createPipelines(context.swapChainWidth, context.swapChainHeight);
+	createDescriptorSets(false);
 
 	DescriptorSetGenerator descriptorSetGenerator(m_userInterfaceDescriptorSetLayoutGenerator.getDescriptorLayouts());
 	descriptorSetGenerator.setCombinedImageSampler(0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, context.userInterfaceImage->getDefaultImageView(), *m_sampler.get());
@@ -136,6 +137,8 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 	lightUBData.outputSize = glm::uvec2(m_preDepthPass->getOutput()->getExtent().width, m_preDepthPass->getOutput()->getExtent().height);
 	lightUBData.near = context.camera->getNear();
 	lightUBData.far = context.camera->getFar();
+	lightUBData.invView = glm::inverse(context.camera->getViewMatrix());
+	lightUBData.invProjection = glm::inverse(context.camera->getProjectionMatrix());
 	m_lightUniformBuffer->transferCPUMemory(&lightUBData, sizeof(lightUBData), 0 /* srcOffet */);
 
 	/* Command buffer record */
@@ -301,7 +304,7 @@ void ForwardPass::createPipelines(uint32_t width, uint32_t height)
 void ForwardPass::createDescriptorSetLayout()
 {
 	m_descriptorSetLayoutGenerator.reset();
-	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT, 0); // matrices
+	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT | (m_shadowMaskPass->getDenoisingPatternImage() ? VK_SHADER_STAGE_FRAGMENT_BIT : 0), 0); // matrices
 	m_descriptorSetLayoutGenerator.addSampler(VK_SHADER_STAGE_FRAGMENT_BIT, 1);
 	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 2, m_sceneElements.getImageCount());
 	m_descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_FRAGMENT_BIT, 3);

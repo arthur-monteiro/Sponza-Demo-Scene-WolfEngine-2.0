@@ -64,7 +64,7 @@ void LoadingScreenUniquePass::initializeResources(const Wolf::InitializationCont
 	m_loadingIconUniformBuffer.reset(new Buffer(sizeof(glm::mat4), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::EACH_FRAME));
 
 	DescriptorSetGenerator loadingScreenDescriptorSetGenerator(loadingScreenDescriptorSetLayoutGenerator.getDescriptorLayouts());
-	loadingScreenDescriptorSetGenerator.setCombinedImageSampler(0, m_loadingScreenTexture->getImageLayout(), m_loadingScreenTexture->getDefaultImageView(), *m_sampler.get());
+	loadingScreenDescriptorSetGenerator.setCombinedImageSampler(0, m_loadingScreenTexture->getImageLayout(), m_loadingScreenTexture->getDefaultImageView(), *m_sampler);
 
 	m_loadingScreenDescriptorSet.reset(new DescriptorSet(m_loadingScreenDescriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
 	m_loadingScreenDescriptorSet->update(loadingScreenDescriptorSetGenerator.getDescriptorSetCreateInfo());
@@ -73,8 +73,8 @@ void LoadingScreenUniquePass::initializeResources(const Wolf::InitializationCont
 	m_loadingScreenFragmentShaderParser.reset(new ShaderParser("Shaders/loadingScreen/loadingScreen.frag"));
 
 	DescriptorSetGenerator loadingIconDescriptorSetGenerator(loadingIconDescriptorSetLayoutGenerator.getDescriptorLayouts());
-	loadingIconDescriptorSetGenerator.setBuffer(0, *m_loadingIconUniformBuffer.get());
-	loadingIconDescriptorSetGenerator.setCombinedImageSampler(1, m_loadingIconTexture->getImageLayout(), m_loadingIconTexture->getDefaultImageView(), *m_sampler.get());
+	loadingIconDescriptorSetGenerator.setBuffer(0, *m_loadingIconUniformBuffer);
+	loadingIconDescriptorSetGenerator.setCombinedImageSampler(1, m_loadingIconTexture->getImageLayout(), m_loadingIconTexture->getDefaultImageView(), *m_sampler);
 
 	m_loadingIconDescriptorSet.reset(new DescriptorSet(m_loadingIconDescriptorSetLayout->getDescriptorSetLayout(), UpdateRate::EACH_FRAME));
 	m_loadingIconDescriptorSet->update(loadingIconDescriptorSetGenerator.getDescriptorSetCreateInfo());

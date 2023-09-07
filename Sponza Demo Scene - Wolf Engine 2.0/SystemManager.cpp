@@ -45,6 +45,7 @@ void SystemManager::run()
 			gameContext.sunDirection = -glm::vec3(glm::sin(m_sunPhi) * glm::cos(m_sunTheta), glm::cos(m_sunPhi), glm::sin(m_sunPhi) * glm::sin(m_sunTheta));
 			gameContext.sunPhi = static_cast<float>(m_sunPhi);
 			gameContext.sunTheta = static_cast<float>(m_sunTheta);
+			gameContext.sunAreaAngle = static_cast<float>(m_sunAreaAngle);
 
 			m_sponzaScene->update(m_wolfInstance.get(), gameContext);
 			m_sponzaScene->frame(m_wolfInstance.get());
@@ -80,6 +81,7 @@ void SystemManager::createWolfInstance()
 	jsObject["setSunTheta"] = std::bind(&SystemManager::setSunTheta, this, std::placeholders::_1, std::placeholders::_2);
 	jsObject["setSunPhi"] = std::bind(&SystemManager::setSunPhi, this, std::placeholders::_1, std::placeholders::_2);
 	jsObject["setShadows"] = std::bind(&SystemManager::setShadows, this, std::placeholders::_1, std::placeholders::_2);
+	jsObject["setSunAreaAngle"] = std::bind(&SystemManager::setSunAreaAngle, this, std::placeholders::_1, std::placeholders::_2);
 
 	m_gameContexts.reserve(g_configuration->getMaxCachedFrames());
 	std::vector<void*> contextPtrs(g_configuration->getMaxCachedFrames());
@@ -99,7 +101,7 @@ void SystemManager::loadSponzaScene()
 	m_needJoinLoadingThread = true;
 }
 
-void SystemManager::debugCallback(Debug::Severity severity, Debug::Type type, std::string message)
+void SystemManager::debugCallback(Debug::Severity severity, Debug::Type type, const std::string& message)
 {
 	switch (severity)
 	{
@@ -150,4 +152,9 @@ void SystemManager::setShadows(const ultralight::JSObject& thisObject, const ult
 	{
 		Debug::sendError("Unsupported shadow type");
 	}
+}
+
+void SystemManager::setSunAreaAngle(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args)
+{
+	m_sunAreaAngle = args[0].ToNumber() / 180.0;
 }

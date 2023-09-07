@@ -97,8 +97,8 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 	ShadowUBData shadowUBData;
 	//glm::mat4 modelMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));;
 	shadowUBData.invView = glm::inverse(context.camera->getViewMatrix());
-	shadowUBData.invProjection = glm::inverse(context.camera->getProjection());
-	shadowUBData.previousMVPMatrix = context.camera->getProjection() * context.camera->getPreviousViewMatrix();
+	shadowUBData.invProjection = glm::inverse(context.camera->getProjectionMatrix());
+	shadowUBData.previousMVPMatrix = context.camera->getProjectionMatrix() * context.camera->getPreviousViewMatrix();
 
 	const float near = context.camera->getNear();
 	const float far = context.camera->getFar();

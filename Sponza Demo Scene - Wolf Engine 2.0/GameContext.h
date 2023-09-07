@@ -6,6 +6,7 @@ struct GameContext
 {
 	glm::vec3 sunDirection;
 	float sunPhi, sunTheta;
+	float sunAreaAngle;
 	glm::vec3 sunColor;
 
 	bool shadowmapScreenshotsRequested;

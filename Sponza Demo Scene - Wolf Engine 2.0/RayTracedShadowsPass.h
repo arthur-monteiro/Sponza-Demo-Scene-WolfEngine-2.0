@@ -64,7 +64,8 @@ private:
 		glm::vec4 sunDirectionAndNoiseIndex;
 
 		glm::uint drawWithoutNoiseFrameIndex; // 0 = draw with noise
-		glm::vec3 padding;
+		float sunAreaAngle;
+		glm::vec2 padding;
 	};
 	std::unique_ptr<Wolf::Buffer> m_uniformBuffer;
 	std::unique_ptr<Wolf::Image> m_outputMask;

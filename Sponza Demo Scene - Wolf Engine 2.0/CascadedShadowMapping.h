@@ -90,7 +90,7 @@ private:
 	std::unique_ptr<Wolf::DescriptorSetLayout> m_descriptorSetLayout;
 
 	/* Cascades */
-	uint32_t m_cascadeTextureSize[CASCADE_COUNT] = { 6144, 6144, 6144, 6144 };
+	uint32_t m_cascadeTextureSize[CASCADE_COUNT] = { 3072, 3072, 3072, 3072 };
 	std::array<std::unique_ptr<CascadeDepthPass>, CASCADE_COUNT> m_cascadeDepthPasses;
 	std::array<float, CASCADE_COUNT> m_cascadeSplits;
 };

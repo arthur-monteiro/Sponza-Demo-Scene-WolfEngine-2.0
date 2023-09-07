@@ -107,6 +107,12 @@ void SponzaScene::update(const WolfEngine* wolfInstance, GameContext& gameContex
 	m_cubeModel->setPosition(glm::vec3(5.0f * glm::sin(offsetInSeconds), 2.0f, 0.0f));
 
 	gameContext.shadowmapScreenshotsRequested = false;
+	if(m_inputHandler->keyPressedThisFrame(GLFW_KEY_ESCAPE))
+	{
+		m_isLocked = !m_isLocked;
+		wolfInstance->evaluateUserInterfaceScript(m_isLocked ? "setVisibility(true)" : "setVisibility(false)");
+		m_camera->setLocked(m_isLocked);
+	}
 	if(m_inputHandler->keyPressedThisFrame(GLFW_KEY_SPACE))
 	{
 		requestedScreenshot = true; // delay the request to the next frame

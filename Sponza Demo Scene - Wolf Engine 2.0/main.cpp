@@ -4,8 +4,8 @@
 
 int main()
 {
-	SystemManager s;
-	s.run();
+	const std::unique_ptr<SystemManager> s(new SystemManager);
+	s->run();
 
 	return 0;
 }

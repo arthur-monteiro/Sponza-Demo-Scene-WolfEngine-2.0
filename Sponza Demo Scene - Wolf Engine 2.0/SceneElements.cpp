@@ -23,7 +23,7 @@ void SceneElements::addImage(Wolf::Image* image)
 void SceneElements::updateUB(const Wolf::CameraInterface& camera) const
 {
 	MatricesUBData mvp;
-	mvp.projection = camera.getProjection();
+	mvp.projection = camera.getProjectionMatrix();
 	mvp.view = camera.getViewMatrix();
 	for (uint32_t i = 0; i < m_objects.size(); ++i)
 	{

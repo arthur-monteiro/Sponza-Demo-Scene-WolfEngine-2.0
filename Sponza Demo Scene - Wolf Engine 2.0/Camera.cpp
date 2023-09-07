@@ -8,20 +8,12 @@ Camera::Camera(glm::vec3 position, glm::vec3 target, glm::vec3 verticalAxis, flo
 	m_sensibility = sensibility;
 	m_speed = speed;
 	m_aspect = aspect;
-
-	setTarget(m_target);
 }
 
 void Camera::update(GLFWwindow* window)
 {
 	if (m_overrideViewMatrices)
 		return;
-
-	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS && m_oldEscapeState == GLFW_RELEASE)
-	{
-		m_locked = !m_locked;
-	}
-	m_oldEscapeState = glfwGetKey(window, GLFW_KEY_ESCAPE);
 
 	if (m_oldMousePosX < 0 || m_locked)
 	{
@@ -83,7 +75,7 @@ glm::vec3 Camera::getPosition() const
 	return m_position;
 }
 
-glm::mat4 Camera::getProjection() const
+glm::mat4 Camera::getProjectionMatrix() const
 {
 	if (m_overrideViewMatrices)
 		return m_overridenProjectionMatrix;
@@ -92,43 +84,6 @@ glm::mat4 Camera::getProjection() const
 	r[1][1] *= -1;
 
 	return r;
-}
-
-void Camera::setPosition(glm::vec3 position)
-{
-}
-
-void Camera::setTarget(glm::vec3 target)
-{
-	m_orientation = m_target - m_position;
-	m_orientation = glm::normalize(m_orientation);
-
-	if (m_verticalAxis.x == 1.0)
-	{
-		m_phi = glm::asin(m_orientation.x);
-		m_theta = glm::acos(m_orientation.y / glm::cos(m_phi));
-
-		if (m_orientation.y < 0)
-			m_theta *= -1;
-	}
-
-	else if (m_verticalAxis.y == 1.0)
-	{
-		m_phi = glm::asin(m_orientation.y);
-		m_theta = glm::acos(m_orientation.z / glm::cos(m_phi));
-
-		if (m_orientation.z < 0)
-			m_theta *= -1;
-	}
-
-	else
-	{
-		m_phi = glm::asin(m_orientation.x);
-		m_theta = glm::acos(m_orientation.z / glm::cos(m_phi));
-
-		if (m_orientation.z < 0)
-			m_theta *= -1;
-	}
 }
 
 void Camera::overrideMatrices(const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix)

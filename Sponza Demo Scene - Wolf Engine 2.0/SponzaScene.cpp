@@ -12,7 +12,7 @@ using namespace Wolf;
 
 SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 {
-	m_sponzaModel.reset(new ObjectModel(vulkanQueueLock, glm::scale(glm::mat4(1.0f), glm::vec3(0.01f)), wolfInstance->getHardwareCapabilities().rayTracingAvailable, 
+	m_sponzaModel.reset(new ObjectModel(vulkanQueueLock, glm::scale(glm::mat4(1.0f), glm::vec3(0.01f)), wolfInstance->isRayTracingAvailable(), 
 		"Models/sponza/sponza.obj", "Models/sponza", true, 0));
 	std::vector<Image*> sponzaImages;
 	m_sponzaModel->getImages(sponzaImages);
@@ -76,7 +76,7 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 	m_shadowMaskComputePass.reset(new ShadowMaskComputePass(m_depthPass.get(), m_cascadedShadowMappingPass.get()));
 	wolfInstance->initializePass(m_shadowMaskComputePass.get());
 
-	if (wolfInstance->getHardwareCapabilities().rayTracingAvailable)
+	if (wolfInstance->isRayTracingAvailable())
 	{
 		m_rayTracedShadowsPass.reset(new RayTracedShadowsPass(m_sponzaModel.get(), m_depthPass.get()));
 		wolfInstance->initializePass(m_rayTracedShadowsPass.get());

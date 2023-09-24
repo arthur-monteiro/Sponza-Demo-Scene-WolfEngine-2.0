@@ -25,6 +25,7 @@ private:
 	void loadSponzaScene();
 
 	static void debugCallback(Wolf::Debug::Severity severity, Wolf::Debug::Type type, const std::string& message);
+	void bindUltralightCallbacks();
 	ultralight::JSValue getFrameRate(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
 	void setSunTheta(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);
 	void setSunPhi(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args);

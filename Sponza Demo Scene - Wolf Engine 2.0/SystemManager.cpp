@@ -72,16 +72,10 @@ void SystemManager::createWolfInstance()
 	wolfInstanceCreateInfo.configFilename = "config/config.ini";
 	wolfInstanceCreateInfo.debugCallback = debugCallback;
 	wolfInstanceCreateInfo.htmlURL = "UI/UI.html";
+	wolfInstanceCreateInfo.bindUltralightCallbacks = std::bind(&SystemManager::bindUltralightCallbacks, this);
 
 	m_wolfInstance.reset(new WolfEngine(wolfInstanceCreateInfo));
-
-	ultralight::JSObject jsObject;
-	m_wolfInstance->getUserInterfaceJSObject(jsObject);
-	jsObject["getFrameRate"] = static_cast<ultralight::JSCallbackWithRetval>(std::bind(&SystemManager::getFrameRate, this, std::placeholders::_1, std::placeholders::_2));
-	jsObject["setSunTheta"] = std::bind(&SystemManager::setSunTheta, this, std::placeholders::_1, std::placeholders::_2);
-	jsObject["setSunPhi"] = std::bind(&SystemManager::setSunPhi, this, std::placeholders::_1, std::placeholders::_2);
-	jsObject["setShadows"] = std::bind(&SystemManager::setShadows, this, std::placeholders::_1, std::placeholders::_2);
-	jsObject["setSunAreaAngle"] = std::bind(&SystemManager::setSunAreaAngle, this, std::placeholders::_1, std::placeholders::_2);
+	bindUltralightCallbacks();
 
 	m_gameContexts.reserve(g_configuration->getMaxCachedFrames());
 	std::vector<void*> contextPtrs(g_configuration->getMaxCachedFrames());
@@ -119,6 +113,17 @@ void SystemManager::debugCallback(Debug::Severity severity, Debug::Type type, co
 	}
 
 	std::cout << message << std::endl;
+}
+
+void SystemManager::bindUltralightCallbacks()
+{
+	ultralight::JSObject jsObject;
+	m_wolfInstance->getUserInterfaceJSObject(jsObject);
+	jsObject["getFrameRate"] = static_cast<ultralight::JSCallbackWithRetval>(std::bind(&SystemManager::getFrameRate, this, std::placeholders::_1, std::placeholders::_2));
+	jsObject["setSunTheta"] = std::bind(&SystemManager::setSunTheta, this, std::placeholders::_1, std::placeholders::_2);
+	jsObject["setSunPhi"] = std::bind(&SystemManager::setSunPhi, this, std::placeholders::_1, std::placeholders::_2);
+	jsObject["setShadows"] = std::bind(&SystemManager::setShadows, this, std::placeholders::_1, std::placeholders::_2);
+	jsObject["setSunAreaAngle"] = std::bind(&SystemManager::setSunAreaAngle, this, std::placeholders::_1, std::placeholders::_2);
 }
 
 ultralight::JSValue SystemManager::getFrameRate(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args)

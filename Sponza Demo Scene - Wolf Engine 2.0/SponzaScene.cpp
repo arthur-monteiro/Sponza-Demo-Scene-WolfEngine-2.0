@@ -64,9 +64,6 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 	m_camera.reset(new Camera(glm::vec3(1.4f, 1.2f, 0.3f), glm::vec3(2.0f, 0.9f, -0.3f), glm::vec3(0.0f, 1.0f, 0.0f), 0.01f, 5.0f, 16.0f / 9.0f));
 	wolfInstance->setCameraInterface(m_camera.get());
 
-	m_inputHandler.reset(new InputHandler());
-	wolfInstance->registerInputHandlerInterface(m_inputHandler.get());
-
 	m_depthPass.reset(new DepthPass(m_sceneElements, true));
 	wolfInstance->initializePass(m_depthPass.get());
 
@@ -107,13 +104,13 @@ void SponzaScene::update(const WolfEngine* wolfInstance, GameContext& gameContex
 	m_cubeModel->setPosition(glm::vec3(5.0f * glm::sin(offsetInSeconds), 2.0f, 0.0f));
 
 	gameContext.shadowmapScreenshotsRequested = false;
-	if(m_inputHandler->keyPressedThisFrame(GLFW_KEY_ESCAPE))
+	if(wolfInstance->getInputHandler().keyPressedThisFrame(GLFW_KEY_ESCAPE))
 	{
 		m_isLocked = !m_isLocked;
 		wolfInstance->evaluateUserInterfaceScript(m_isLocked ? "setVisibility(true)" : "setVisibility(false)");
 		m_camera->setLocked(m_isLocked);
 	}
-	if(m_inputHandler->keyPressedThisFrame(GLFW_KEY_SPACE))
+	if(wolfInstance->getInputHandler().keyPressedThisFrame(GLFW_KEY_SPACE))
 	{
 		requestedScreenshot = true; // delay the request to the next frame
 

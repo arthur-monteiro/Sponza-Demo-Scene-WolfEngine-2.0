@@ -42,7 +42,7 @@ float computeShadows()
         float oneMinCosTheta = 1 - cosTheta;
 
         rotMatrix = mat3(cosTheta + (R.x * R.x) * oneMinCosTheta,        R.x * R.y * oneMinCosTheta - R.z * sinTheta,    R.x * R.z * oneMinCosTheta + R.y * sinTheta,
-                            R.y * R.x * oneMinCosTheta + R.y * sinTheta,    cosTheta + (R.y * R.y) * oneMinCosTheta,        R.y * R.z * oneMinCosTheta - R.x * sinTheta,
+                            R.y * R.x * oneMinCosTheta + R.z * sinTheta,    cosTheta + (R.y * R.y) * oneMinCosTheta,        R.y * R.z * oneMinCosTheta - R.x * sinTheta,
                             R.z * R.x * oneMinCosTheta - R.y * sinTheta,    R.z * R.y * oneMinCosTheta + R.x * sinTheta,    cosTheta + (R.z * R.z) * oneMinCosTheta);
     }
 

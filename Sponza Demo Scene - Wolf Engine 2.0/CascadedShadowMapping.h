@@ -9,12 +9,8 @@
 #include <DescriptorSet.h>
 #include <DescriptorSetLayout.h>
 #include <DescriptorSetLayoutGenerator.h>
-#include <FrameBuffer.h>
 #include <Image.h>
-#include <Mesh.h>
 #include <Pipeline.h>
-#include <RenderPass.h>
-#include <Sampler.h>
 #include <ShaderParser.h>
 
 class SceneElements;

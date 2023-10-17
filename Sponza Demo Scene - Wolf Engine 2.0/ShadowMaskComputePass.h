@@ -7,6 +7,7 @@
 #include <DescriptorSetLayout.h>
 #include <DescriptorSetLayoutGenerator.h>
 #include <Pipeline.h>
+#include <Sampler.h>
 #include <ShaderParser.h>
 
 #include "CascadedShadowMapping.h"

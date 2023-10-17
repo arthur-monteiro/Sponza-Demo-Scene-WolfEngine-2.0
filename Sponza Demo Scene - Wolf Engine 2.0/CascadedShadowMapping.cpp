@@ -1,5 +1,7 @@
 #include "CascadedShadowMapping.h"
 
+#include <glm/gtx/transform.hpp>
+
 #include <CameraInterface.h>
 #include <DescriptorSetGenerator.h>
 #include <ObjLoader.h>

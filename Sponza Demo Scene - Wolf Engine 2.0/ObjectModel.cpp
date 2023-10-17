@@ -20,7 +20,7 @@ ObjectModel::ObjectModel(std::mutex* vulkanQueueLock, const glm::mat4& transform
 		modelLoadingInfo.additionalVertexBufferUsages = rayTracingFlags;
 		modelLoadingInfo.additionalIndexBufferUsages = rayTracingFlags;
 	}
-	m_objLoader.reset(new ObjLoader(modelLoadingInfo));
+	ObjLoader::loadObject(m_modelData, modelLoadingInfo);
 
 	m_transform = transform;
 

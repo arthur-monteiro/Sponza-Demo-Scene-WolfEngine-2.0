@@ -12,9 +12,15 @@ class WolfSlider extends HTMLElement {
         this.max = this.getAttribute('max')?this.getAttribute('max'):"100";
         this.step = this.getAttribute('step')?this.getAttribute('step'): (this.min + this.max)/100;
         this.values = this.getAttribute("value")? this.getAttribute("value").split(";").map((str)=>Number(str)) : [(this.min + this.max)/2];
-        var div = document.createElement('div');
-        div.style = "margin: auto 0 auto 1rem;"
-        div.innerHTML=`${this.values}`;
+        var div = document.createElement('input');
+        div.style = "margin: auto 0 auto 1rem; width: 50px; border-color: transparent; background: inherit; color: inherit;";
+        div.value =`${this.values}`;
+        div.classList.add("textInput");
+        let oninputName = this.getAttribute('oninput');
+        div.addEventListener('change', function(ev) { 
+            eval(oninputName + "(this.value)");
+            this.parentNode.querySelector("input").value = this.value;
+        });
         this.appendChild(div)
         this.values.forEach((val, index) => {
             this.querySelector('section').appendChild(this.input({
@@ -39,7 +45,7 @@ class WolfSlider extends HTMLElement {
         el.setAttribute("value", value);
         el.addEventListener('input', () => {
             this.values[key] = Number(el.value);
-            this.querySelector('div').innerHTML=`${this.values}`;
+            this.querySelector('.textInput').value =`${this.values}`;
             window[this.getAttribute('oninput')](this.values.length == 1 ? this.values[0] : this.values);
         })
         return el;

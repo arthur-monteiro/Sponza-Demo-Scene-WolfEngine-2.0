@@ -13,6 +13,7 @@ layout(binding = 3, set = 0) uniform UniformBuffer
     vec4 sunDirectionAndNoiseIndex;
     uint drawWithoutNoiseFrameIndex;
     float sunAreaAngle;
+    vec2 jitter;
 } ub;
 layout(binding = 4) uniform sampler3D noiseTexture;
 layout(location = 0) rayPayloadEXT bool isShadowed;
@@ -33,6 +34,7 @@ void main()
     const vec2 pixelPos = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
     const vec2 inUV = pixelPos / vec2(gl_LaunchSizeEXT.xy);
     vec2 d = inUV * 2.0 - 1.0;
+    d -= ub.jitter;
 
     vec4 viewRay = ub.invProjection * vec4(d.x, d.y, 1.0, 1.0);
     float depth = texelFetch(depthImage, ivec2(gl_LaunchIDEXT.xy), 0).r;

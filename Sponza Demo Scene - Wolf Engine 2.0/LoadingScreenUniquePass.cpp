@@ -152,8 +152,8 @@ void LoadingScreenUniquePass::record(const Wolf::RecordContext& context)
 
 void LoadingScreenUniquePass::submit(const Wolf::SubmitContext& context)
 {
-	std::vector<const Semaphore*> waitSemaphores{ context.imageAvailableSemaphore };
-	std::vector<VkSemaphore> signalSemaphores{ m_semaphore->getSemaphore() };
+	const std::vector<const Semaphore*> waitSemaphores{ context.swapChainImageAvailableSemaphore, context.userInterfaceImageAvailableSemaphore };
+	const std::vector<VkSemaphore> signalSemaphores{ m_semaphore->getSemaphore() };
 	m_commandBuffer->submit(context.commandBufferIdx, waitSemaphores, signalSemaphores, context.frameFence);
 
 	bool anyShaderModified = m_loadingScreenVertexShaderParser->compileIfFileHasBeenModified();

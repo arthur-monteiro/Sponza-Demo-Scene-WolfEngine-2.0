@@ -5,16 +5,18 @@
 #include <CameraInterface.h>
 #include <DescriptorSetGenerator.h>
 #include <ObjLoader.h>
+#include <RenderPass.h>
 
 #include "DebugMarker.h"
-#include "DepthPass.h"
+#include "PreDepthPass.h"
 #include "GameContext.h"
 #include "SceneElements.h"
 
 using namespace Wolf;
 
-CascadeDepthPass::CascadeDepthPass(const Wolf::InitializationContext& context, const SceneElements& sceneElements, uint32_t width, uint32_t height, const Wolf::CommandBuffer* commandBuffer, VkDescriptorSetLayout descriptorSetLayout,
-	const Wolf::ShaderParser* vertexShaderParser, const Wolf::DescriptorSetLayoutGenerator& descriptorSetLayoutGenerator) : m_width(width), m_height(height), m_sceneElements(sceneElements)
+CascadeDepthPass::CascadeDepthPass(const InitializationContext& context, const SceneElements& sceneElements, uint32_t width, uint32_t height, const CommandBuffer* commandBuffer, 
+	VkDescriptorSetLayout descriptorSetLayout, const ShaderParser* vertexShaderParser, const DescriptorSetLayoutGenerator& descriptorSetLayoutGenerator)
+: m_sceneElements(sceneElements), m_width(width), m_height(height)
 {
 	m_commandBuffer = commandBuffer;
 	m_descriptorSetLayout = descriptorSetLayout;
@@ -49,7 +51,7 @@ void CascadeDepthPass::shaderChanged()
 	createPipeline();
 }
 
-void CascadeDepthPass::recordDraws(const Wolf::RecordContext& context)
+void CascadeDepthPass::recordDraws(const RecordContext& context)
 {
 	const VkCommandBuffer commandBuffer = getCommandBuffer(context);
 
@@ -59,7 +61,7 @@ void CascadeDepthPass::recordDraws(const Wolf::RecordContext& context)
 	m_sceneElements.drawMeshes(commandBuffer);
 }
 
-VkCommandBuffer CascadeDepthPass::getCommandBuffer(const Wolf::RecordContext& context)
+VkCommandBuffer CascadeDepthPass::getCommandBuffer(const RecordContext& context)
 {
 	return m_commandBuffer->getCommandBuffer(context.commandBufferIdx);
 }
@@ -80,11 +82,11 @@ void CascadeDepthPass::createPipeline()
 
 	// IA
 	std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
-	Wolf::Vertex3D::getAttributeDescriptions(attributeDescriptions, 0);
+	Vertex3D::getAttributeDescriptions(attributeDescriptions, 0);
 	pipelineCreateInfo.vertexInputAttributeDescriptions = attributeDescriptions;
 	std::vector<VkVertexInputBindingDescription> bindingDescriptions(1);
 	bindingDescriptions[0] = {};
-	Wolf::Vertex3D::getBindingDescription(bindingDescriptions[0], 0);
+	Vertex3D::getBindingDescription(bindingDescriptions[0], 0);
 	pipelineCreateInfo.vertexInputBindingDescriptions = bindingDescriptions;
 
 	// Raster
@@ -108,7 +110,7 @@ CascadedShadowMapping::CascadedShadowMapping(const SceneElements& sceneElements)
 {
 }
 
-void CascadedShadowMapping::initializeResources(const Wolf::InitializationContext& context)
+void CascadedShadowMapping::initializeResources(const InitializationContext& context)
 {
 	m_commandBuffer.reset(new CommandBuffer(QueueType::GRAPHIC, false /* isTransient */));
 	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT));
@@ -124,8 +126,8 @@ void CascadedShadowMapping::initializeResources(const Wolf::InitializationContex
 		m_cascadeDepthPasses[i].reset(new CascadeDepthPass(context, m_sceneElements, m_cascadeTextureSize[i], m_cascadeTextureSize[i], m_commandBuffer.get(), m_descriptorSetLayout->getDescriptorSetLayout(), m_vertexShaderParser.get(), descriptorSetLayoutGenerator));
 	}
 
-	float near = context.camera->getNear();
-	float far = context.camera->getFar(); // we don't render shadows on all the range
+	const float near = context.camera->getNear();
+	const float far = context.camera->getFar(); // we don't render shadows on all the range
 	uint32_t cascadeIdx = 0;
 	for (float i(1.0f / CASCADE_COUNT); i <= 1.0f; i += 1.0f / CASCADE_COUNT)
 	{
@@ -137,12 +139,12 @@ void CascadedShadowMapping::initializeResources(const Wolf::InitializationContex
 	}
 }
 
-void CascadedShadowMapping::resize(const Wolf::InitializationContext& context)
+void CascadedShadowMapping::resize(const InitializationContext& context)
 {
 	// Nothing to do
 }
 
-void CascadedShadowMapping::record(const Wolf::RecordContext& context)
+void CascadedShadowMapping::record(const RecordContext& context)
 {
 	const GameContext* gameContext = static_cast<const GameContext*>(context.gameContext);
 
@@ -161,9 +163,9 @@ void CascadedShadowMapping::record(const Wolf::RecordContext& context)
 		radius = glm::sqrt(b * b + (startCascade + radius) * (startCascade + radius) - 2.0f * b * startCascade * cosHalfHFOV) * 0.75f;
 
 		const float texelPerUnit = static_cast<float>(m_cascadeTextureSize[cascade]) / (radius * 2.0f);
-		glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(texelPerUnit));
+		glm::mat4 scaleMat = scale(glm::mat4(1.0f), glm::vec3(texelPerUnit));
 		glm::mat4 lookAt = scaleMat * glm::lookAt(glm::vec3(0.0f), -gameContext->sunDirection, glm::vec3(0.0f, 1.0f, 0.0f));
-		glm::mat4 lookAtInv = glm::inverse(lookAt);
+		glm::mat4 lookAtInv = inverse(lookAt);
 
 		glm::vec3 frustumCenter = context.camera->getPosition() + (context.camera->getOrientation() * startCascade + context.camera->getOrientation() * endCascade) / 2.0f;
 		frustumCenter = lookAt * glm::vec4(frustumCenter, 1.0f);
@@ -171,7 +173,7 @@ void CascadedShadowMapping::record(const Wolf::RecordContext& context)
 		frustumCenter.y = floor(frustumCenter.y);
 		frustumCenter = lookAtInv * glm::vec4(frustumCenter, 1.0f);
 
-		glm::mat4 lightViewMatrix = glm::lookAt(frustumCenter - 50.0f * glm::normalize(gameContext->sunDirection), frustumCenter, glm::vec3(0.0f, 1.0f, 0.0f));
+		glm::mat4 lightViewMatrix = glm::lookAt(frustumCenter - 50.0f * normalize(gameContext->sunDirection), frustumCenter, glm::vec3(0.0f, 1.0f, 0.0f));
 
 		glm::mat4 proj = glm::ortho(-radius, radius, -radius, radius, -30.0f * 6.0f, 30.0f * 6.0f);
 		m_cascadeDepthPasses[cascade]->setMVP(lightViewMatrix, proj);
@@ -184,7 +186,7 @@ void CascadedShadowMapping::record(const Wolf::RecordContext& context)
 
 	DebugMarker::beginRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), DebugMarker::renderPassDebugColor, "Cascade shadow maps");
 
-	for (uint32_t i = 0, end = m_cascadeDepthPasses.size(); i < end ; ++i)
+	for (uint32_t i = 0, end = static_cast<uint32_t>(m_cascadeDepthPasses.size()); i < end; ++i)
 	{
 		constexpr float color[4] = { 0.4f, 0.4f, 0.4f, 1.0f };
 		DebugMarker::insert(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), color, "Cascade " + std::to_string(i));
@@ -196,10 +198,10 @@ void CascadedShadowMapping::record(const Wolf::RecordContext& context)
 	m_commandBuffer->endCommandBuffer(context.commandBufferIdx);
 }
 
-void CascadedShadowMapping::submit(const Wolf::SubmitContext& context)
+void CascadedShadowMapping::submit(const SubmitContext& context)
 {
-	std::vector<const Semaphore*> waitSemaphores{ };
-	std::vector<VkSemaphore> signalSemaphores{ m_semaphore->getSemaphore() };
+	const std::vector<const Semaphore*> waitSemaphores{ };
+	const std::vector<VkSemaphore> signalSemaphores{ m_semaphore->getSemaphore() };
 	m_commandBuffer->submit(context.commandBufferIdx, waitSemaphores, signalSemaphores, VK_NULL_HANDLE);
 
 	if (m_vertexShaderParser->compileIfFileHasBeenModified())

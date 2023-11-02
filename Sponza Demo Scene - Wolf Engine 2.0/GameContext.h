@@ -8,6 +8,7 @@ struct GameContext
 	float sunPhi, sunTheta;
 	float sunAreaAngle;
 	glm::vec3 sunColor;
+	glm::vec2 pixelJitter;
 
 	bool shadowmapScreenshotsRequested;
 

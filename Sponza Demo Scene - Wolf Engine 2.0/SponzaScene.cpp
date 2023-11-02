@@ -51,11 +51,15 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 		createImageInfo.mipLevelCount = mipmapGenerator.getMipLevelCount();
 		createImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		m_cubeImages[idx].reset(new Image(createImageInfo));
+		vulkanQueueLock->lock();
 		m_cubeImages[idx]->copyCPUBuffer(imageFileLoader.getPixels(), Image::SampledInFragmentShader());
+		vulkanQueueLock->unlock();
 
 		for (uint32_t mipLevel = 1; mipLevel < mipmapGenerator.getMipLevelCount(); ++mipLevel)
 		{
+			vulkanQueueLock->lock();
 			m_cubeImages[idx]->copyCPUBuffer(mipmapGenerator.getMipLevel(mipLevel), Image::SampledInFragmentShader(mipLevel), mipLevel);
+			vulkanQueueLock->unlock();
 		}
 
 		m_sceneElements.addImage(m_cubeImages[idx].get());
@@ -64,23 +68,28 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 	m_camera.reset(new Camera(glm::vec3(1.4f, 1.2f, 0.3f), glm::vec3(2.0f, 0.9f, -0.3f), glm::vec3(0.0f, 1.0f, 0.0f), 0.01f, 5.0f, 16.0f / 9.0f));
 	wolfInstance->setCameraInterface(m_camera.get());
 
-	m_depthPass.reset(new DepthPass(m_sceneElements, true));
-	wolfInstance->initializePass(m_depthPass.get());
+	m_preDepthPass.reset(new PreDepthPass(m_sceneElements, true));
+	wolfInstance->initializePass(m_preDepthPass.get());
 
 	m_cascadedShadowMappingPass.reset(new CascadedShadowMapping(m_sceneElements));
 	wolfInstance->initializePass(m_cascadedShadowMappingPass.get());
 
-	m_shadowMaskComputePass.reset(new ShadowMaskComputePass(m_depthPass.get(), m_cascadedShadowMappingPass.get()));
+	m_shadowMaskComputePass.reset(new ShadowMaskComputePass(m_preDepthPass.get(), m_cascadedShadowMappingPass.get()));
 	wolfInstance->initializePass(m_shadowMaskComputePass.get());
 
 	if (wolfInstance->isRayTracingAvailable())
 	{
-		m_rayTracedShadowsPass.reset(new RayTracedShadowsPass(m_sponzaModel.get(), m_depthPass.get()));
+		m_rayTracedShadowsPass.reset(new RayTracedShadowsPass(m_sponzaModel.get(), m_preDepthPass.get()));
 		wolfInstance->initializePass(m_rayTracedShadowsPass.get());
 	}
 
-	m_forwardPass.reset(new ForwardPass(m_sceneElements, m_depthPass.get(),
+	m_forwardPass.reset(new ForwardPass(m_sceneElements, m_preDepthPass.get(),
 		m_currentPassState.shadowType == ShadowType::CSM ? static_cast<ShadowMaskBasePass*>(m_shadowMaskComputePass.get()) : static_cast<ShadowMaskBasePass*>(m_rayTracedShadowsPass.get())));
+	
+	m_taaComposePass.reset(new TemporalAntiAliasingPass(m_preDepthPass.get(), m_forwardPass.get()));
+	wolfInstance->initializePass(m_taaComposePass.get());
+
+	m_forwardPass->setOutputImages(m_taaComposePass->getImages());
 	wolfInstance->initializePass(m_forwardPass.get());
 }
 
@@ -92,6 +101,12 @@ void SponzaScene::update(const WolfEngine* wolfInstance, GameContext& gameContex
 	{
 		wolfInstance->waitIdle();
 		m_forwardPass->setShadowMaskPass(m_nextPassState.shadowType == ShadowType::CSM ? static_cast<ShadowMaskBasePass*>(m_shadowMaskComputePass.get()) : static_cast<ShadowMaskBasePass*>(m_rayTracedShadowsPass.get()));
+		m_forwardPass->setDebugMode(m_nextPassState.debugMode); // changing shadow type might change debug image
+	}
+	else if (m_nextPassState.debugMode != m_currentPassState.debugMode)
+	{
+		wolfInstance->waitIdle();
+		m_forwardPass->setDebugMode(m_nextPassState.debugMode);
 	}
 
 	m_currentPassState = m_nextPassState;
@@ -100,7 +115,7 @@ void SponzaScene::update(const WolfEngine* wolfInstance, GameContext& gameContex
 
 	const auto currentTime = std::chrono::high_resolution_clock::now();
 	const long long offsetInMicrosecond = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - m_startTime).count();
-	const float offsetInSeconds = offsetInMicrosecond / 1'000'000.0;
+	const float offsetInSeconds = static_cast<float>(offsetInMicrosecond) / 1'000'000.0f;
 	m_cubeModel->setPosition(glm::vec3(5.0f * glm::sin(offsetInSeconds), 2.0f, 0.0f));
 
 	gameContext.shadowmapScreenshotsRequested = false;
@@ -190,13 +205,13 @@ void SponzaScene::update(const WolfEngine* wolfInstance, GameContext& gameContex
 		screenshotId++;
 	}
 
-	m_sceneElements.updateUB(*m_camera);
+	m_sceneElements.updateUB(*m_camera, gameContext);
 }
 
 void SponzaScene::frame(WolfEngine* wolfInstance) const
 {
 	std::vector<CommandRecordBase*> passes;
-	passes.push_back(m_depthPass.get());
+	passes.push_back(m_preDepthPass.get());
 	if(m_currentPassState.shadowType == ShadowType::CSM)
 	{
 		passes.push_back(m_cascadedShadowMappingPass.get());
@@ -207,6 +222,7 @@ void SponzaScene::frame(WolfEngine* wolfInstance) const
 		passes.push_back(m_rayTracedShadowsPass.get());
 	}
 	passes.push_back(m_forwardPass.get());
+	passes.push_back(m_taaComposePass.get());
 
-	wolfInstance->frame(passes, m_forwardPass->getSemaphore());
+	wolfInstance->frame(passes, m_taaComposePass->getSemaphore());
 }

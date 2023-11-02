@@ -21,9 +21,9 @@ public:
 
 	void update(GLFWwindow* window) override;
 
-	glm::mat4 getViewMatrix() const override;
-	glm::mat4 getPreviousViewMatrix() const override;
-	glm::mat4 getProjectionMatrix() const override;
+	const glm::mat4& getViewMatrix() const override;
+	const glm::mat4& getPreviousViewMatrix() const override;
+	const glm::mat4& getProjectionMatrix() const override;
 	glm::vec3 getPosition() const override;
 	float getNear() const override { return m_near; }
 	float getFar() const override { return m_far; }
@@ -37,7 +37,7 @@ public:
 	void overrideMatrices(const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix);
 
 private:
-	void updateOrientation(int xOffset, int yOffset);
+	void updateOrientation(float xOffset, float yOffset);
 
 private:
 	float m_phi = 0.0f;
@@ -66,6 +66,8 @@ private:
 
 	glm::mat4 m_viewMatrix;
 	glm::mat4 m_previousViewMatrix;
+
+	glm::mat4 m_projectionMatrix;
 
 	bool m_overrideViewMatrices = false;
 	glm::mat4 m_overridenProjectionMatrix;

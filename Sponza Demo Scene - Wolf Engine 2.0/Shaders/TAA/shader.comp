@@ -1,0 +1,66 @@
+#version 460
+#extension GL_EXT_samplerless_texture_functions : require
+
+layout (binding = 0, rgba8) uniform readonly image2D previousImage;
+layout (binding = 1, rgba8) uniform image2D resultImage;
+layout (binding = 2, std140) uniform UniformBuffer
+{
+    mat4 invView;
+    mat4 invProjection;
+	vec4 projectionParams;
+	mat4 previousMVPMatrix;
+    uvec2 screenSize;
+	uint enableTAA;
+} ub;
+layout (binding = 3) uniform texture2D depthImage;
+
+const uint LOCAL_SIZE = 16;
+layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
+void main()
+{
+    const vec2 inUV = gl_GlobalInvocationID.xy / vec2(ub.screenSize);
+    vec2 d = inUV * 2.0 - 1.0;
+
+    vec4 viewRay = ub.invProjection * vec4(d.x, d.y, 1.0, 1.0);
+    float depth = texelFetch(depthImage, ivec2(gl_GlobalInvocationID.xy), 0).r;
+    float linearDepth = ub.projectionParams.y / (depth - ub.projectionParams.x);
+    vec3 viewPos = viewRay.xyz * linearDepth;
+	vec4 worldPos = ub.invView * vec4(viewPos, 1.0);
+
+    vec3 color = imageLoad(resultImage, ivec2(gl_GlobalInvocationID.xy)).bgr;
+
+	vec3 nearColor0 = imageLoad(resultImage, ivec2(gl_GlobalInvocationID.xy) + ivec2(1, 0)).bgr;
+    vec3 nearColor1 = imageLoad(resultImage, ivec2(gl_GlobalInvocationID.xy) + ivec2(0, 1)).bgr;
+    vec3 nearColor2 = imageLoad(resultImage, ivec2(gl_GlobalInvocationID.xy) + ivec2(-1, 0)).bgr;
+    vec3 nearColor3 = imageLoad(resultImage, ivec2(gl_GlobalInvocationID.xy) + ivec2(0, -1)).bgr;
+
+	vec4 previousFragmentPosition = ub.previousMVPMatrix * worldPos;
+	previousFragmentPosition.xyz /= previousFragmentPosition.w;
+	previousFragmentPosition.xy = 0.5 * previousFragmentPosition.xy + vec2(0.5);
+	
+	if(ub.enableTAA > 0 && (
+		previousFragmentPosition.x >= 0.0 && previousFragmentPosition.x <= 1.0 && previousFragmentPosition.y >= 0.0 && previousFragmentPosition.y <= 1.0)) // previous pixel is out of screen
+	{
+		previousFragmentPosition.xy *= ub.screenSize;
+
+		ivec2 previousFragmentPositionIVec = ivec2(floor(previousFragmentPosition.xy));
+
+		vec3 previousColor00 = imageLoad(previousImage, previousFragmentPositionIVec + ivec2(0, 0)).rgb;
+		vec3 previousColor01 = imageLoad(previousImage, previousFragmentPositionIVec + ivec2(0, 1)).rgb;
+		vec3 previousColor10 = imageLoad(previousImage, previousFragmentPositionIVec + ivec2(1, 0)).rgb;
+		vec3 previousColor11 = imageLoad(previousImage, previousFragmentPositionIVec + ivec2(1, 1)).rgb;
+
+		vec3 previousColor0 = mix(previousColor00, previousColor01, previousFragmentPosition.y - float(previousFragmentPositionIVec.y));
+		vec3 previousColor1 = mix(previousColor10, previousColor11, previousFragmentPosition.y - float(previousFragmentPositionIVec.y));
+
+		vec3 previousColor = mix(previousColor0, previousColor1, previousFragmentPosition.x - float(previousFragmentPositionIVec.x));
+
+		vec3 boxMin = min(color, min(nearColor0, min(nearColor1, min(nearColor2, nearColor3))));
+   		vec3 boxMax = max(color, max(nearColor0, max(nearColor1, max(nearColor2, nearColor3))));
+
+		previousColor = clamp(previousColor, boxMin, boxMax);
+		color = color * 0.1 + previousColor.rgb * 0.9;
+	}
+
+    imageStore(resultImage, ivec2(gl_GlobalInvocationID.xy), vec4(color, 1.0));
+}

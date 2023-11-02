@@ -11,6 +11,14 @@ layout (location = 3) in mat3 inTBN;
 layout (location = 6) in vec3 inWorldSpaceNormal;
 layout (location = 7) in vec3 inWorldSpacePos;
 
+const uint MAX_MODELS = 2;
+layout(binding = 0) uniform UniformBufferMVP
+{
+    mat4 models[MAX_MODELS];
+	mat4 view;
+	mat4 projection;
+    vec2 jitter;
+} ubMVP;
 layout (binding = 1) uniform sampler textureSampler;
 layout (binding = 2) uniform texture2D[] textures;
 layout (binding = 3, r32f) uniform image2D shadowMask;
@@ -31,13 +39,29 @@ layout(binding = 4, std140) uniform readonly UniformBufferLighting
 
 #if RAYTRACED_SHADOWS
 layout (binding = 5) uniform texture2D depthTexture;
+layout (binding = 6, rg32f) uniform image2D denoisingSamplingPattern;
 #endif
 
 layout (location = 0) out vec4 outColor;
 
 #include "ShaderCommon.glsl"
 
+float linearizeDepth(float d)
+{
+    return ubLighting.near * ubLighting.far / (ubLighting.far - d * (ubLighting.far - ubLighting.near));
+}
+
 #if RAYTRACED_SHADOWS
+vec3 viewPosFromDepth(vec2 screenSpaceUV)
+{
+    vec2 d = screenSpaceUV * 2.0f - 1.0f;
+    vec4 viewRay = ubLighting.invProjection * vec4(d.x, d.y, 1.0, 1.0);
+    float linearDepth = linearizeDepth(texture(sampler2D(depthTexture, textureSampler), screenSpaceUV).r);
+
+    return viewRay.xyz * linearDepth;
+}
+
+#define COMPUTE_SHADOWS
 #include "rayTracedShadows/denoising.glsl"
 #endif
 
@@ -106,24 +130,7 @@ void main()
     color = color * color;
 	//color = vec3(1.0) - exp(-color * 0.5);
     color = pow(color, vec3(1.0 / 2.2));
-
-    //vec3 viewPos_2 = viewPosFromDepth(gl_FragCoord.xy / vec2(ubLighting.outputSize));
-    //vec3 worldPos_2 = (ubLighting.invView * vec4(viewPos_2, 1.0f)).xyz;
-
-    /*vec3 currentViewPos = inViewPos;
-
-    vec2 uv = vec2((gl_FragCoord.x + 1) / float(ubLighting.outputSize.x), (gl_FragCoord.y + 1) / float(ubLighting.outputSize.y));
-    vec2 d = 2.0f * uv - 1.0f;
-    vec4 viewRay = ubLighting.invProjection * vec4(d.xy, 1.0, 1.0);
-
-    vec3 viewDir = normalize(viewRay.xyz);
-
-    float denom = dot(normalize(transpose(inTBN)[2]), viewDir.xyz);
-
-    float t = dot((currentViewPos), normalize(transpose(inTBN)[2])) / denom;
-    vec3 newViewPos = viewDir * t;
     
-    outColor = vec4(abs(currentViewPos - newViewPos) * 1000.0, 1.0);*/
     outColor = vec4(color, 1.0);
 }
 

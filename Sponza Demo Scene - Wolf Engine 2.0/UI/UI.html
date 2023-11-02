@@ -34,11 +34,23 @@
 				<option value="Ray Tracing">Ray Tracing</option>
 			</wolf-select>			
 		</div>
+		<div class="card">
+			<div class="card-title">Debug mode</div>
+			<wolf-select id="debugModel-select" onchange="setDebugMode">
+				<option value="none">None</option>
+				<option value="shadows">Shadows</option>
+			</wolf-select>			
+		</div>
+		<div class="card">
+			<div class="card-title">Enable TAA</div>
+			<wolf-checkbox id="taa-checkbox" onchange="setEnableTAA" checked="true"/>
+		</div>
 	</div>
 	<div class="frameRate" id="frameRate">FPS: 60</div>
 
     <script src="./slider.js"></script>
     <script src="./select.js"></script>
+	<script src="./checkbox.js"></script>
 	<script type="text/javascript">
 	function updateFrameRate()
 	{

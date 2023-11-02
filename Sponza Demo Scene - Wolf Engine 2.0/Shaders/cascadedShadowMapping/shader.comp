@@ -3,7 +3,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 #extension GL_EXT_samplerless_texture_functions : require
 
-const float BIAS = 0.0;
+const float BIAS = 0.0; // defined in the pipeline
 const float SEAM_RANGE = 1.0;
 const float HALF_SEAM_RANGE = SEAM_RANGE / 2.0;
 const uint CASCADES_COUNT = 4;
@@ -127,7 +127,7 @@ layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) 
 void main()
 {
     const vec2 inUV = gl_GlobalInvocationID.xy / vec2(ub.screenSize);
-    vec2 d = inUV * 2.0 - 1.0;
+    vec2 d = inUV * 2.0 - 1.0; // note that we should apply jitter to have correct depth but we don't get issue due to depth bias
 
     vec4 viewRay = ub.invProjection * vec4(d.x, d.y, 1.0, 1.0);
     float depth = texelFetch(depthImage, ivec2(gl_GlobalInvocationID.xy), 0).r;
@@ -159,7 +159,7 @@ void main()
 
 		if(abs(previousColor.g - (worldPos.x + worldPos.y + worldPos.z)) < MAX_POS_DIFF)
 		{
-			color = color * 0.05f + previousColor.r * 0.95f;
+			//color = color * 0.05f + previousColor.r * 0.95f;
 		}
 	}
 

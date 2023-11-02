@@ -1,0 +1,45 @@
+#version 460
+#extension GL_EXT_samplerless_texture_functions : require
+
+layout (binding = 0, rgba8) uniform image2D outputImage;
+layout (binding = 1, rg32f) uniform image2D denoisingSamplingPattern;
+layout (binding = 2, std140) uniform UniformBuffer
+{
+    mat4 view;
+    mat4 invView;
+    mat4 projection;
+    mat4 invProjection;
+	vec4 projectionParams;
+
+    vec3 worldSpaceNormal;
+    vec2 pixelUV;
+    vec2 patternSize;
+    vec2 outputImageSize;
+} ub;
+layout (binding = 3) uniform texture2D depthImage;
+
+float linearizeDepth(float d)
+{
+    return (2.0 * 0.1 * 50.0) / (50.0 + 0.1 - d * (50.0 - 0.1));
+}
+
+#include "denoising.glsl"
+
+const uint LOCAL_SIZE = 16;
+layout (local_size_x = LOCAL_SIZE, local_size_y = 1, local_size_z = 1) in;
+void main()
+{
+    if (gl_GlobalInvocationID.x > ub.patternSize.x)
+        return;
+
+    vec2 d = ub.pixelUV * 2.0 - 1.0;
+    vec4 viewRay = ub.invProjection * vec4(d.x, d.y, 1.0, 1.0);
+    float depth = texelFetch(depthImage, ivec2(ub.pixelUV * ub.outputImageSize), 0).r;
+    float linearDepth = ub.projectionParams.y / (depth - ub.projectionParams.x);
+    vec3 viewPos = viewRay.xyz * linearDepth;
+    vec3 refWorldPos = (ub.invView * vec4(viewPos, 1.0f)).xyz;
+
+    computeSamplePositions(ub.worldSpaceNormal, refWorldPos, ub.invView, ub.view, ub.projection);
+
+    imageStore(outputImage, ivec2(samplesTexturePos[gl_GlobalInvocationID.x] * ub.outputImageSize), mix(vec4(1.0, 0.0, 0.0, 1.0), vec4(0.0, 1.0, 0.0, 1.0), sampleWeight[gl_GlobalInvocationID.x]));
+}

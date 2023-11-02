@@ -7,6 +7,7 @@ layout(binding = 0) uniform UniformBufferMVP
     mat4 models[MAX_MODELS];
 	mat4 view;
 	mat4 projection;
+	vec2 jitter;
 } ubMVP;
 
 layout(location = 0) in vec3 inPosition;
@@ -40,6 +41,7 @@ void main()
 	vec4 viewPos = ubMVP.view * ubMVP.models[modelIdx] * vec4(inPosition, 1.0);
 
     gl_Position = ubMVP.projection * viewPos;
+	gl_Position.xy += ubMVP.jitter * gl_Position.w;
 
 	mat3 usedModelMatrix = transpose(inverse(mat3(ubMVP.view * ubMVP.models[modelIdx])));
     vec3 n = normalize(usedModelMatrix * inNormal);
@@ -52,5 +54,4 @@ void main()
     outTexCoord = inTexCoord;
 	outMaterialID = inMaterialID;
 	outWorldSpaceNormal = normalize(inNormal);
-	outWorldSpacePos =  (ubMVP.models[modelIdx] * vec4(inPosition, 1.0)).xyz;
 } 

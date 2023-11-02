@@ -2,6 +2,8 @@
 
 #include <CameraInterface.h>
 
+#include "GameContext.h"
+
 using namespace Wolf;
 
 SceneElements::SceneElements()
@@ -15,12 +17,12 @@ void SceneElements::addObject(ObjectModel* object)
 	object->getImages(m_images);
 }
 
-void SceneElements::addImage(Wolf::Image* image)
+void SceneElements::addImage(Image* image)
 {
 	m_images.push_back(image);
 }
 
-void SceneElements::updateUB(const Wolf::CameraInterface& camera) const
+void SceneElements::updateUB(const CameraInterface& camera, const GameContext& gameContext) const
 {
 	MatricesUBData mvp;
 	mvp.projection = camera.getProjectionMatrix();
@@ -28,8 +30,9 @@ void SceneElements::updateUB(const Wolf::CameraInterface& camera) const
 	for (uint32_t i = 0; i < m_objects.size(); ++i)
 	{
 		mvp.models[i] = m_objects[i]->getTransform();
-	}
-	m_matricesUniformBuffer->transferCPUMemory(&mvp, sizeof(mvp), 0 /* srcOffet */);
+	}	
+	mvp.jitter = gameContext.pixelJitter;
+	m_matricesUniformBuffer->transferCPUMemory(&mvp, sizeof(mvp), 0);
 }
 
 void SceneElements::drawMeshes(VkCommandBuffer commandBuffer) const

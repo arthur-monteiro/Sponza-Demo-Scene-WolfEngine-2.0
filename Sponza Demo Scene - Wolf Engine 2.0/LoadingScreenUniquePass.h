@@ -21,7 +21,7 @@ public:
 	void record(const Wolf::RecordContext& context) override;
 	void submit(const Wolf::SubmitContext& context) override;
 
-	const Wolf::Semaphore* getSemaphore() const { return m_semaphore.get(); }
+	const Wolf::Semaphore* getSemaphore() const override { return m_semaphore.get(); }
 
 private:
 	void createPipelines(uint32_t width, uint32_t height);

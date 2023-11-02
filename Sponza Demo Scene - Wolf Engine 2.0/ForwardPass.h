@@ -18,33 +18,39 @@
 
 #include "ShadowMaskBasePass.h"
 
-class DepthPass;
+class PreDepthPass;
 class ObjectModel;
 class SceneElements;
 
 class ForwardPass : public Wolf::CommandRecordBase
 {
 public:
-	ForwardPass(const SceneElements& sceneElements, DepthPass* preDepthPass, ShadowMaskBasePass* shadowMaskPass);
+	ForwardPass(const SceneElements& sceneElements, PreDepthPass* preDepthPass, ShadowMaskBasePass* shadowMaskPass);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
 	void record(const Wolf::RecordContext& context) override;
 	void submit(const Wolf::SubmitContext& context) override;
 
+	void setOutputImages(const std::vector<Wolf::Image*>& images) { m_outputImages = images; }
 	void setShadowMaskPass(ShadowMaskBasePass* shadowMaskPass);
+
+	enum class DebugMode { None, Shadows };
+	void setDebugMode(DebugMode debugMode);
 
 private:
 	void createPipelines(uint32_t width, uint32_t height);
 	void createDescriptorSetLayout();
 	void createDescriptorSets(bool forceReset);
+	void createOrUpdateDebugDescriptorSet();
 
 private:
 	const SceneElements& m_sceneElements;
 
 	std::unique_ptr<Wolf::RenderPass> m_renderPass;
-	DepthPass* m_preDepthPass;
+	PreDepthPass* m_preDepthPass;
 
+	std::vector<Wolf::Image*> m_outputImages;
 	std::vector<std::unique_ptr<Wolf::Framebuffer>> m_frameBuffers;
 	
 	const Wolf::Semaphore* m_preDepthPassSemaphore;
@@ -58,7 +64,7 @@ private:
 	std::unique_ptr<Wolf::ShaderParser> m_userInterfaceFragmentShaderParser;
 
 	std::unique_ptr<Wolf::Pipeline> m_pipeline;
-	std::unique_ptr<Wolf::Pipeline> m_userInterfacePipeline;
+	std::unique_ptr<Wolf::Pipeline> m_drawFullScreenImagePipeline;
 	uint32_t m_swapChainWidth;
 	uint32_t m_swapChainHeight;
 
@@ -87,9 +93,11 @@ private:
 	Wolf::DescriptorSetLayoutGenerator m_descriptorSetLayoutGenerator;
 	std::array<std::unique_ptr<Wolf::DescriptorSet>, ShadowMaskBasePass::MASK_COUNT> m_descriptorSets;
 
-	/* UI resources */
-	Wolf::DescriptorSetLayoutGenerator m_userInterfaceDescriptorSetLayoutGenerator;
-	std::unique_ptr<Wolf::DescriptorSetLayout> m_userInterfaceDescriptorSetLayout;
+	/* UI and debug resources */
+	Wolf::DescriptorSetLayoutGenerator m_drawFullScreenImageDescriptorSetLayoutGenerator;
+	std::unique_ptr<Wolf::DescriptorSetLayout> m_drawFullScreenImageDescriptorSetLayout;
 	std::unique_ptr<Wolf::DescriptorSet> m_userInterfaceDescriptorSet;
+	std::unique_ptr<Wolf::DescriptorSet> m_debugDescriptorSet;
 	std::unique_ptr<Wolf::Mesh> m_fullscreenRect;
+	Wolf::Image* m_usedDebugImage;
 };

@@ -10,7 +10,7 @@
 #include <ShaderBindingTable.h>
 #include <ShaderParser.h>
 
-class DepthPass;
+class PreDepthPass;
 class ObjectModel;
 class SharedGPUResources;
 
@@ -20,7 +20,7 @@ class SharedGPUResources;
 class RayTracedShadowsPass : public Wolf::CommandRecordBase, public ShadowMaskBasePass
 {
 public:
-	RayTracedShadowsPass(const ObjectModel* sponzaModel, DepthPass* preDepthPass);
+	RayTracedShadowsPass(const ObjectModel* sponzaModel, PreDepthPass* preDepthPass);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
@@ -31,19 +31,20 @@ public:
 	const Wolf::Semaphore* getSemaphore() const override { return Wolf::CommandRecordBase::getSemaphore(); }
 	void getConditionalBlocksToEnableWhenReadingMask(std::vector<std::string>& conditionalBlocks) const override { conditionalBlocks.emplace_back("RAYTRACED_SHADOWS"); }
 	Wolf::Image* getDenoisingPatternImage() override { return m_denoiseSamplingPattern.get(); }
+	Wolf::Image* getDebugImage() const override { return m_debugOutputImage.get(); }
 
 	void saveMaskToFile(const std::string& filename) const;
 
 private:
-	void createPipeline();
+	void createPipelines();
 	void createDescriptorSet();
-	void createOutputImage(uint32_t width, uint32_t height);
+	void createOutputImages(uint32_t width, uint32_t height);
 
 	static float jitter();
 
 private:
 	const ObjectModel* m_sponzaModel;
-	DepthPass* m_preDepthPass;
+	PreDepthPass* m_preDepthPass;
 
 	std::unique_ptr<Wolf::Pipeline> m_pipeline;
 
@@ -65,7 +66,7 @@ private:
 
 		glm::uint drawWithoutNoiseFrameIndex; // 0 = draw with noise
 		float sunAreaAngle;
-		glm::vec2 padding;
+		glm::vec2 jitter;
 	};
 	std::unique_ptr<Wolf::Buffer> m_uniformBuffer;
 	std::unique_ptr<Wolf::Image> m_outputMask;
@@ -79,5 +80,30 @@ private:
 	// Denoise
 	static constexpr uint32_t DENOISE_TEXTURE_SIZE = 25;
 	std::unique_ptr<Wolf::Image> m_denoiseSamplingPattern;
+
+	// Debug
+	std::unique_ptr<Wolf::Image> m_debugOutputImage;
+	std::unique_ptr<Wolf::ShaderParser> m_debugComputeShaderParser;
+
+	std::unique_ptr<Wolf::DescriptorSetLayout> m_debugDescriptorSetLayout;
+	Wolf::DescriptorSetLayoutGenerator m_debugDescriptorSetLayoutGenerator;
+	std::unique_ptr<Wolf::DescriptorSet> m_debugDescriptorSet;
+	struct DebugUBData
+	{
+		glm::mat4 view;
+		glm::mat4 invView;
+		glm::mat4 projection;
+		glm::mat4 invProjection;
+		glm::vec4 projectionParams;
+
+		glm::vec3 worldSpaceNormal;
+		float padding;
+		glm::vec2 pixelUV;
+		glm::vec2 patternSize;
+		glm::vec2 outputImageSize;
+	};
+	std::unique_ptr<Wolf::Buffer> m_debugUniformBuffer;
+
+	std::unique_ptr<Wolf::Pipeline> m_debugPipeline;
 };
 

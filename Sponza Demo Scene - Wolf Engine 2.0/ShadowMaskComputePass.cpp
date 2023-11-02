@@ -7,11 +7,11 @@
 #include <ObjLoader.h>
 
 #include "DebugMarker.h"
-#include "DepthPass.h"
+#include "PreDepthPass.h"
 
 using namespace Wolf;
 
-ShadowMaskComputePass::ShadowMaskComputePass(DepthPass* preDepthPass, CascadedShadowMapping* csmManager)
+ShadowMaskComputePass::ShadowMaskComputePass(PreDepthPass* preDepthPass, CascadedShadowMapping* csmManager)
 {
 	m_preDepthPass = preDepthPass;
 	m_csmManager = csmManager;
@@ -95,7 +95,6 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 
 	/* Update data */
 	ShadowUBData shadowUBData;
-	//glm::mat4 modelMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));;
 	shadowUBData.invView = glm::inverse(context.camera->getViewMatrix());
 	shadowUBData.invProjection = glm::inverse(context.camera->getProjectionMatrix());
 	shadowUBData.previousMVPMatrix = context.camera->getProjectionMatrix() * context.camera->getPreviousViewMatrix();

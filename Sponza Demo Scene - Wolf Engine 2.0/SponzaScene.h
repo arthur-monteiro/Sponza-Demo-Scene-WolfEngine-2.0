@@ -4,14 +4,16 @@
 
 #include "Camera.h"
 #include "CascadedShadowMapping.h"
-#include "DepthPass.h"
+#include "PreDepthPass.h"
+#include "ForwardPass.h"
 #include "InputHandler.h"
 #include "ForwardPass.h"
 #include "RayTracedShadowsPass.h"
 #include "SceneElements.h"
 #include "ShadowMaskComputePass.h"
+#include "TemporalAntiAliasingPass.h"
 
-class GameContext;
+struct GameContext;
 
 class SponzaScene
 {
@@ -27,6 +29,8 @@ public:
 	};
 	void setShadowType(ShadowType shadowType) { m_nextPassState.shadowType = shadowType; }
 
+	void setDebugMode(ForwardPass::DebugMode debugMode) { m_nextPassState.debugMode = debugMode; }
+
 private:
 	std::chrono::high_resolution_clock::time_point m_startTime = std::chrono::high_resolution_clock::now();
 
@@ -38,7 +42,7 @@ private:
 	bool m_isLocked = false;
 
 	// PreDepth
-	std::unique_ptr<DepthPass> m_depthPass;
+	std::unique_ptr<PreDepthPass> m_preDepthPass;
 
 	// Shadows
 	std::unique_ptr<CascadedShadowMapping> m_cascadedShadowMappingPass;
@@ -48,9 +52,13 @@ private:
 	// Direct lighting
 	std::unique_ptr<ForwardPass> m_forwardPass;
 
+	// Post process
+	std::unique_ptr<TemporalAntiAliasingPass> m_taaComposePass;
+
 	struct PassState
 	{
 		ShadowType shadowType = ShadowType::CSM;
+		ForwardPass::DebugMode debugMode = ForwardPass::DebugMode::None;
 	};
 
 	PassState m_currentPassState;

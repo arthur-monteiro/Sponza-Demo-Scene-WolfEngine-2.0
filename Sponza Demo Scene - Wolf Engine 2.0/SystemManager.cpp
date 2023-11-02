@@ -36,7 +36,7 @@ void SystemManager::run()
 			m_wolfInstance->frame(passes, m_loadingScreenUniquePass->getSemaphore());
 
 			m_mutex.unlock();
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 		}
 		else if (m_gameState == GAME_STATE::RUNNING)
 		{
@@ -46,6 +46,10 @@ void SystemManager::run()
 			gameContext.sunPhi = static_cast<float>(m_sunPhi);
 			gameContext.sunTheta = static_cast<float>(m_sunTheta);
 			gameContext.sunAreaAngle = static_cast<float>(m_sunAreaAngle);
+			gameContext.pixelJitter.x = ((JITTER_OFFSET[m_wolfInstance->getCurrentFrame() % std::size(JITTER_OFFSET)].x - 0.5f) * 2.0f) / static_cast<float>(m_wolfInstance->getSwapChainExtent().width);
+			gameContext.pixelJitter.y = ((JITTER_OFFSET[m_wolfInstance->getCurrentFrame() % std::size(JITTER_OFFSET)].y - 0.5f) * 2.0f) / static_cast<float>(m_wolfInstance->getSwapChainExtent().height);
+			if (!m_TAAEnabled)
+				gameContext.pixelJitter = glm::vec2(0.0f, 0.0f);
 
 			m_sponzaScene->update(m_wolfInstance.get(), gameContext);
 			m_sponzaScene->frame(m_wolfInstance.get());
@@ -56,7 +60,7 @@ void SystemManager::run()
 		const long long durationInMs = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - m_startTimeFPSCounter).count();
 		if (durationInMs > 1000)
 		{
-			m_stableFPS = std::round((1000.0f * m_currentFramesAccumulated) / static_cast<float>(durationInMs));
+			m_stableFPS = static_cast<uint32_t>(std::round((1000.0f * static_cast<float>(m_currentFramesAccumulated)) / static_cast<float>(durationInMs)));
 
 			m_currentFramesAccumulated = 0;
 			m_startTimeFPSCounter = currentTime;
@@ -72,7 +76,7 @@ void SystemManager::createWolfInstance()
 	wolfInstanceCreateInfo.configFilename = "config/config.ini";
 	wolfInstanceCreateInfo.debugCallback = debugCallback;
 	wolfInstanceCreateInfo.htmlURL = "UI/UI.html";
-	wolfInstanceCreateInfo.bindUltralightCallbacks = std::bind(&SystemManager::bindUltralightCallbacks, this);
+	wolfInstanceCreateInfo.bindUltralightCallbacks = [this] { bindUltralightCallbacks(); };
 
 	m_wolfInstance.reset(new WolfEngine(wolfInstanceCreateInfo));
 	bindUltralightCallbacks();
@@ -87,8 +91,18 @@ void SystemManager::createWolfInstance()
 	m_wolfInstance->setGameContexts(contextPtrs);
 }
 
+#ifdef _WIN32
+#define NOMINMAX
+#include <Windows.h>
+#undef ERROR
+#endif
+
 void SystemManager::loadSponzaScene()
 {
+#ifdef _WIN32
+	SetThreadDescription(GetCurrentThread(), L"Loading");
+#endif
+
 	m_sponzaScene.reset(new SponzaScene(m_wolfInstance.get(), &m_mutex));
 
 	m_gameState = GAME_STATE::RUNNING;
@@ -124,6 +138,8 @@ void SystemManager::bindUltralightCallbacks()
 	jsObject["setSunPhi"] = std::bind(&SystemManager::setSunPhi, this, std::placeholders::_1, std::placeholders::_2);
 	jsObject["setShadows"] = std::bind(&SystemManager::setShadows, this, std::placeholders::_1, std::placeholders::_2);
 	jsObject["setSunAreaAngle"] = std::bind(&SystemManager::setSunAreaAngle, this, std::placeholders::_1, std::placeholders::_2);
+	jsObject["setDebugMode"] = std::bind(&SystemManager::setDebugMode, this, std::placeholders::_1, std::placeholders::_2);
+	jsObject["setEnableTAA"] = std::bind(&SystemManager::setEnableTAA, this, std::placeholders::_1, std::placeholders::_2);
 }
 
 ultralight::JSValue SystemManager::getFrameRate(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args)
@@ -146,20 +162,42 @@ void SystemManager::setShadows(const ultralight::JSObject& thisObject, const ult
 {
 	const std::string shadowType(static_cast<ultralight::String>(args[0].ToString()).utf8().data());
 	if(shadowType == "Shadow Mapping")
-	{
 		m_sponzaScene->setShadowType(SponzaScene::ShadowType::CSM);
-	}
 	else if(shadowType == "Ray Tracing")
-	{
 		m_sponzaScene->setShadowType(SponzaScene::ShadowType::RayTraced);
-	}
 	else
-	{
 		Debug::sendError("Unsupported shadow type");
-	}
 }
 
 void SystemManager::setSunAreaAngle(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args)
 {
 	m_sunAreaAngle = args[0].ToNumber() / 180.0;
+}
+
+void SystemManager::setDebugMode(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args)
+{
+	const std::string strDebugMode(static_cast<ultralight::String>(args[0].ToString()).utf8().data());
+
+	ForwardPass::DebugMode debugMode = ForwardPass::DebugMode::None;
+	if (strDebugMode == "none")
+		debugMode = ForwardPass::DebugMode::None;
+	else if (strDebugMode == "shadows")
+		debugMode = ForwardPass::DebugMode::Shadows;
+	else
+		Debug::sendError("Unsupported debug mode");
+
+	m_sponzaScene->setDebugMode(debugMode);
+}
+
+void SystemManager::setEnableTAA(const ultralight::JSObject& thisObject, const ultralight::JSArgs& args)
+{
+	const std::string enable(static_cast<ultralight::String>(args[0].ToString()).utf8().data());
+
+	if (enable == "true")
+		m_TAAEnabled = true;
+	else if (enable == "false")
+		m_TAAEnabled = false;
+	else
+		Debug::sendError("Wrong input for set enable TAA");
+
 }

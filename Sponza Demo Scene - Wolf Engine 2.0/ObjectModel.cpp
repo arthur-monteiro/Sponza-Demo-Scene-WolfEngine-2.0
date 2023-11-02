@@ -26,7 +26,9 @@ ObjectModel::ObjectModel(std::mutex* vulkanQueueLock, const glm::mat4& transform
 
 	if (buildAccelerationStructuresForRayTracing)
 	{
+		vulkanQueueLock->lock();
 		buildAccelerationStructures();
+		vulkanQueueLock->unlock();
 	}
 }
 

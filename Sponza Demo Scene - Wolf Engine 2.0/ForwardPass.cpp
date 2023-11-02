@@ -12,15 +12,17 @@
 #include <ObjLoader.h>
 #include <Timer.h>
 
-#include "DepthPass.h"
+#include "PreDepthPass.h"
 #include "GameContext.h"
 #include "ShadowMaskComputePass.h"
 #include "SceneElements.h"
 #include "Vertex2DTextured.h"
 
+#include "RayTracedShadowsPass.h" // temp
+
 using namespace Wolf;
 
-ForwardPass::ForwardPass(const SceneElements& sceneElements, DepthPass* preDepthPass, ShadowMaskBasePass* shadowMaskPass) : m_sceneElements(sceneElements)
+ForwardPass::ForwardPass(const SceneElements& sceneElements, PreDepthPass* preDepthPass, ShadowMaskBasePass* shadowMaskPass) : m_sceneElements(sceneElements)
 {
 	m_preDepthPassSemaphore = preDepthPass->getSemaphore();
 	m_preDepthPass = preDepthPass;
@@ -35,20 +37,20 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 		m_preDepthPass->getOutput()->getDefaultImageView());
 	depth.loadOperation = VK_ATTACHMENT_LOAD_OP_LOAD;
 	depth.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	Attachment color({ context.swapChainWidth, context.swapChainHeight }, context.swapChainFormat, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, nullptr);
+	Attachment color({ context.swapChainWidth, context.swapChainHeight }, m_outputImages[0]->getFormat(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, nullptr);
 
 	m_renderPass.reset(new RenderPass({ depth, color }));
 
 	m_commandBuffer.reset(new CommandBuffer(QueueType::GRAPHIC, false /* isTransient */));
 
-	m_frameBuffers.resize(context.swapChainImageCount);
-	for (uint32_t i = 0; i < context.swapChainImageCount; ++i)
+	m_frameBuffers.resize(m_outputImages.size());
+	for (uint32_t i = 0; i < m_outputImages.size(); ++i)
 	{
-		color.imageView = context.swapChainImages[i]->getDefaultImageView();
+		color.imageView = m_outputImages[i]->getDefaultImageView();
 		m_frameBuffers[i].reset(new Framebuffer(m_renderPass->getRenderPass(), { depth, color }));
 	}
 
-	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
+	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT));
 
 	createDescriptorSetLayout();
 
@@ -69,19 +71,19 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 		createDescriptorSets(true);
 	}
 
-	// UI resources
+	// UI and debug resources
 	{
-		m_userInterfaceDescriptorSetLayoutGenerator.addCombinedImageSampler(VK_SHADER_STAGE_FRAGMENT_BIT, 0);
-		m_userInterfaceDescriptorSetLayout.reset(new DescriptorSetLayout(m_userInterfaceDescriptorSetLayoutGenerator.getDescriptorLayouts()));
+		m_drawFullScreenImageDescriptorSetLayoutGenerator.addCombinedImageSampler(VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+		m_drawFullScreenImageDescriptorSetLayout.reset(new DescriptorSetLayout(m_drawFullScreenImageDescriptorSetLayoutGenerator.getDescriptorLayouts()));
 
-		DescriptorSetGenerator descriptorSetGenerator(m_userInterfaceDescriptorSetLayoutGenerator.getDescriptorLayouts());
-		descriptorSetGenerator.setCombinedImageSampler(0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, context.userInterfaceImage->getDefaultImageView(), *m_sampler.get());
+		DescriptorSetGenerator userInterfaceDescriptorSetGenerator(m_drawFullScreenImageDescriptorSetLayoutGenerator.getDescriptorLayouts());
+		userInterfaceDescriptorSetGenerator.setCombinedImageSampler(0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, context.userInterfaceImage->getDefaultImageView(), *m_sampler);
 
-		m_userInterfaceDescriptorSet.reset(new DescriptorSet(m_userInterfaceDescriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
-		m_userInterfaceDescriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
+		m_userInterfaceDescriptorSet.reset(new DescriptorSet(m_drawFullScreenImageDescriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
+		m_userInterfaceDescriptorSet->update(userInterfaceDescriptorSetGenerator.getDescriptorSetCreateInfo());
 
 		// Load fullscreen rect
-		std::vector<Vertex2DTextured> vertices =
+		const std::vector<Vertex2DTextured> vertices =
 		{
 			{ glm::vec2(-1.0f, -1.0f), glm::vec2(0.0f, 0.0f) }, // top left
 			{ glm::vec2(1.0f, -1.0f), glm::vec2(1.0f, 0.0f) }, // top right
@@ -121,7 +123,7 @@ void ForwardPass::resize(const Wolf::InitializationContext& context)
 	createPipelines(context.swapChainWidth, context.swapChainHeight);
 	createDescriptorSets(false);
 
-	DescriptorSetGenerator descriptorSetGenerator(m_userInterfaceDescriptorSetLayoutGenerator.getDescriptorLayouts());
+	DescriptorSetGenerator descriptorSetGenerator(m_drawFullScreenImageDescriptorSetLayoutGenerator.getDescriptorLayouts());
 	descriptorSetGenerator.setCombinedImageSampler(0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, context.userInterfaceImage->getDefaultImageView(), *m_sampler.get());
 	m_userInterfaceDescriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
 }
@@ -142,7 +144,7 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 	m_lightUniformBuffer->transferCPUMemory(&lightUBData, sizeof(lightUBData), 0 /* srcOffet */);
 
 	/* Command buffer record */
-	const uint32_t frameBufferIdx = context.swapChainImageIdx;
+	const uint32_t frameBufferIdx = context.currentFrameIdx % m_outputImages.size();
 
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
 
@@ -151,6 +153,9 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 	m_preDepthPass->getOutput()->setImageLayoutWithoutOperation(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL); // at this point, preDepthPass should have set layout with render pass
 	m_preDepthPass->getOutput()->transitionImageLayout(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), { VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
 		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT });
+
+	if (m_usedDebugImage)
+		m_usedDebugImage->transitionImageLayout(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), Image::SampledInFragmentShader(0));
 
 	std::vector<VkClearValue> clearValues(2);
 	clearValues[0] = { 0.0f };
@@ -164,24 +169,35 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 
 	m_sceneElements.drawMeshes(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
-	/* UI */
-	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_userInterfacePipeline->getPipeline());
-	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_userInterfacePipeline->getPipelineLayout(), 0, 1,
+	/* UI and debug */
+	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_drawFullScreenImagePipeline->getPipeline());
+
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_drawFullScreenImagePipeline->getPipelineLayout(), 0, 1,
 		m_userInterfaceDescriptorSet->getDescriptorSet(), 0, nullptr);
 	m_fullscreenRect->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
+	if (m_usedDebugImage)
+	{
+		vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_drawFullScreenImagePipeline->getPipelineLayout(), 0, 1,
+			m_debugDescriptorSet->getDescriptorSet(), 0, nullptr);
+		m_fullscreenRect->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+	}
+
 	m_renderPass->endRenderPass(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+
+	if (m_usedDebugImage)
+		m_usedDebugImage->transitionImageLayout(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), { VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT });
 
 	DebugMarker::endRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
 	m_commandBuffer->endCommandBuffer(context.commandBufferIdx);
 }
 
-void ForwardPass::submit(const Wolf::SubmitContext& context)
+void ForwardPass::submit(const SubmitContext& context)
 {
-	const std::vector waitSemaphores{ m_shadowMaskPass->getSemaphore() };
+	const std::vector waitSemaphores{ m_shadowMaskPass->getSemaphore(), context.userInterfaceImageAvailableSemaphore };
 	const std::vector signalSemaphores{ m_semaphore->getSemaphore() };
-	m_commandBuffer->submit(context.commandBufferIdx, waitSemaphores, signalSemaphores, context.frameFence);
+	m_commandBuffer->submit(context.commandBufferIdx, waitSemaphores, signalSemaphores, VK_NULL_HANDLE);
 
 	bool anyShaderModified = m_vertexShaderParser->compileIfFileHasBeenModified();
 	std::vector<std::string> conditionalBlocks;
@@ -201,6 +217,21 @@ void ForwardPass::submit(const Wolf::SubmitContext& context)
 void ForwardPass::setShadowMaskPass(ShadowMaskBasePass* shadowMaskPass)
 {
 	m_shadowMaskPass = shadowMaskPass;
+}
+
+void ForwardPass::setDebugMode(DebugMode debugMode)
+{
+	switch (debugMode)
+	{
+		case DebugMode::None:
+			m_usedDebugImage = nullptr;
+			break;
+		case DebugMode::Shadows:
+			m_usedDebugImage = m_shadowMaskPass->getDebugImage();
+			if(m_usedDebugImage)
+				createOrUpdateDebugDescriptorSet();
+			break;
+	}
 }
 
 void ForwardPass::createPipelines(uint32_t width, uint32_t height)
@@ -287,14 +318,14 @@ void ForwardPass::createPipelines(uint32_t width, uint32_t height)
 		pipelineCreateInfo.extent = { width, height };
 
 		// Resources
-		std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { m_userInterfaceDescriptorSetLayout->getDescriptorSetLayout() };
+		std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { m_drawFullScreenImageDescriptorSetLayout->getDescriptorSetLayout() };
 		pipelineCreateInfo.descriptorSetLayouts = descriptorSetLayouts;
 
 		// Color Blend
 		std::vector<RenderingPipelineCreateInfo::BLEND_MODE> blendModes = { RenderingPipelineCreateInfo::BLEND_MODE::TRANS_ALPHA };
 		pipelineCreateInfo.blendModes = blendModes;
 
-		m_userInterfacePipeline.reset(new Pipeline(pipelineCreateInfo));
+		m_drawFullScreenImagePipeline.reset(new Pipeline(pipelineCreateInfo));
 	}
 
 	m_swapChainWidth = width;
@@ -307,7 +338,7 @@ void ForwardPass::createDescriptorSetLayout()
 	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT | (m_shadowMaskPass->getDenoisingPatternImage() ? VK_SHADER_STAGE_FRAGMENT_BIT : 0), 0); // matrices
 	m_descriptorSetLayoutGenerator.addSampler(VK_SHADER_STAGE_FRAGMENT_BIT, 1);
 	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 2, m_sceneElements.getImageCount());
-	m_descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_FRAGMENT_BIT, 3);
+	m_descriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_FRAGMENT_BIT, 3); // shadow mask
 	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_FRAGMENT_BIT, 4); // light ub
 	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT, 5, 1); // depth buffer
 	if (m_shadowMaskPass->getDenoisingPatternImage())
@@ -357,4 +388,14 @@ void ForwardPass::createDescriptorSets(bool forceReset)
 			m_descriptorSets[i].reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
 		m_descriptorSets[i]->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
 	}
+}
+
+void ForwardPass::createOrUpdateDebugDescriptorSet()
+{
+	DescriptorSetGenerator debugDescriptorSetGenerator(m_drawFullScreenImageDescriptorSetLayoutGenerator.getDescriptorLayouts());
+	debugDescriptorSetGenerator.setCombinedImageSampler(0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_shadowMaskPass->getDebugImage()->getDefaultImageView(), *m_sampler);
+
+	if (!m_debugDescriptorSet)
+		m_debugDescriptorSet.reset(new DescriptorSet(m_drawFullScreenImageDescriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
+	m_debugDescriptorSet->update(debugDescriptorSetGenerator.getDescriptorSetCreateInfo());
 }

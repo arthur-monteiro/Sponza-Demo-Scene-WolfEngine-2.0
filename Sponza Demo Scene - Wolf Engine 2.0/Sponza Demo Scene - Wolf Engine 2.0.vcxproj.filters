@@ -36,7 +36,7 @@
     <ClCompile Include="SponzaScene.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="DepthPass.cpp">
+    <ClCompile Include="PreDepthPass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CascadedShadowMapping.cpp">
@@ -52,6 +52,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SceneElements.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TemporalAntiAliasingPass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -77,7 +80,7 @@
     <ClInclude Include="SponzaScene.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="DepthPass.h">
+    <ClInclude Include="PreDepthPass.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="CascadedShadowMapping.h">
@@ -96,6 +99,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SceneElements.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TemporalAntiAliasingPass.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

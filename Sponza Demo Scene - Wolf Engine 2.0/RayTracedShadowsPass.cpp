@@ -10,13 +10,13 @@
 #include <RayTracingShaderGroupGenerator.h>
 
 #include "DebugMarker.h"
-#include "DepthPass.h"
+#include "PreDepthPass.h"
 #include "GameContext.h"
 #include "ObjectModel.h"
 
 using namespace Wolf;
 
-RayTracedShadowsPass::RayTracedShadowsPass(const ObjectModel* sponzaModel, DepthPass* preDepthPass)
+RayTracedShadowsPass::RayTracedShadowsPass(const ObjectModel* sponzaModel, PreDepthPass* preDepthPass)
 {
 	m_sponzaModel = sponzaModel;
 	m_preDepthPass = preDepthPass;
@@ -78,7 +78,7 @@ void RayTracedShadowsPass::initializeResources(const InitializationContext& cont
 	denoiseSamplingPatternImageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 	m_denoiseSamplingPattern.reset(new Image(denoiseSamplingPatternImageCreateInfo));
 
-	const uint32_t samplingPointCountPerSide = glm::sqrt(DENOISE_TEXTURE_SIZE);
+	const uint32_t samplingPointCountPerSide = static_cast<uint32_t>(glm::sqrt(DENOISE_TEXTURE_SIZE));
 	constexpr float distanceBetweenSamples = 0.003f;
 	const float startingSamplePointOffset = -static_cast<int>(samplingPointCountPerSide / 2.0f) * distanceBetweenSamples;
 
@@ -92,14 +92,25 @@ void RayTracedShadowsPass::initializeResources(const InitializationContext& cont
 	}
 	m_denoiseSamplingPattern->copyCPUBuffer(reinterpret_cast<unsigned char*>(samplingPoints.data()), { VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_READ_BIT , VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT });
 
-	createPipeline();
-	createOutputImage(context.swapChainWidth, context.swapChainHeight);
+	// Debug
+	m_debugComputeShaderParser.reset(new ShaderParser("Shaders/rayTracedShadows/debug.comp"));
+
+	m_debugDescriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_COMPUTE_BIT, 0); // output
+	m_debugDescriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 1, 1); // denoising sampling pattern
+	m_debugDescriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_COMPUTE_BIT, 2); // uniform buffer
+	m_debugDescriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 3, 1); // input depth
+	m_debugDescriptorSetLayout.reset(new DescriptorSetLayout(m_debugDescriptorSetLayoutGenerator.getDescriptorLayouts()));
+
+	m_debugUniformBuffer.reset(new Buffer(sizeof(DebugUBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::NEVER));
+
+	createPipelines();
+	createOutputImages(context.swapChainWidth, context.swapChainHeight);
 	createDescriptorSet();
 }
 
 void RayTracedShadowsPass::resize(const InitializationContext& context)
 {
-	createOutputImage(context.swapChainWidth, context.swapChainHeight);
+	createOutputImages(context.swapChainWidth, context.swapChainHeight);
 	createDescriptorSet();
 }
 
@@ -165,8 +176,22 @@ void RayTracedShadowsPass::record(const RecordContext& context)
 	shadowUBData.sunDirectionAndNoiseIndex = glm::vec4(-gameContext->sunDirection, context.currentFrameIdx % NOISE_TEXTURE_VECTOR_COUNT);
 	shadowUBData.drawWithoutNoiseFrameIndex = frameCounter;
 	shadowUBData.sunAreaAngle = gameContext->sunAreaAngle;
+	shadowUBData.jitter = gameContext->pixelJitter;
 
-	m_uniformBuffer->transferCPUMemory(&shadowUBData, sizeof(shadowUBData), 0 /* srcOffet */, context.commandBufferIdx);
+	m_uniformBuffer->transferCPUMemory(&shadowUBData, sizeof(shadowUBData), 0, context.commandBufferIdx);
+
+	DebugUBData debugUBData;
+	debugUBData.view = context.camera->getViewMatrix();
+	debugUBData.invView = shadowUBData.invModelView;
+	debugUBData.projection = context.camera->getProjectionMatrix();
+	debugUBData.invProjection = shadowUBData.invProjection;
+	debugUBData.projectionParams = shadowUBData.projectionParams;
+	debugUBData.worldSpaceNormal = glm::vec3(0.0f, 1.0f, 0.0f);
+	debugUBData.pixelUV = glm::vec2(0.5f, 0.5f);
+	debugUBData.patternSize = glm::vec2(m_denoiseSamplingPattern->getExtent().width, m_denoiseSamplingPattern->getExtent().height);
+	debugUBData.outputImageSize = glm::vec2(m_debugOutputImage->getExtent().width, m_debugOutputImage->getExtent().height);
+
+	m_debugUniformBuffer->transferCPUMemory(&debugUBData, sizeof(debugUBData), 0, context.commandBufferIdx);
 
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
 
@@ -199,6 +224,23 @@ void RayTracedShadowsPass::record(const RecordContext& context)
 
 	DebugMarker::endRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
+	VkClearColorValue black = { 0.0f, 0.0f, 0.0f };
+	VkImageSubresourceRange range = { VK_IMAGE_ASPECT_COLOR_BIT , 0, 1, 0, 1 };
+	vkCmdClearColorImage(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), m_debugOutputImage->getImage(), VK_IMAGE_LAYOUT_GENERAL, &black, 1, &range);
+
+	DebugMarker::beginRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), DebugMarker::rayTracePassDebugColor, "Debug ray Trace shadow denoising");
+
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_debugPipeline->getPipelineLayout(), 0, 1,
+		m_debugDescriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
+
+	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_debugPipeline->getPipeline());
+
+	constexpr VkExtent3D dispatchGroups = { 16, 1, 1 };
+	const uint32_t groupSizeX = m_denoiseSamplingPattern->getExtent().width % dispatchGroups.width != 0 ? m_denoiseSamplingPattern->getExtent().width / dispatchGroups.width + 1 : m_denoiseSamplingPattern->getExtent().width / dispatchGroups.width;
+	vkCmdDispatch(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), groupSizeX, dispatchGroups.height, dispatchGroups.depth);
+
+	DebugMarker::endRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+
 	m_commandBuffer->endCommandBuffer(context.commandBufferIdx);
 }
 
@@ -213,11 +255,13 @@ void RayTracedShadowsPass::submit(const SubmitContext& context)
 		anyShaderModified = true;
 	if (m_closestHitShaderParser->compileIfFileHasBeenModified())
 		anyShaderModified = true;
+	if (m_debugComputeShaderParser->compileIfFileHasBeenModified())
+		anyShaderModified = true;
 
 	if (anyShaderModified)
 	{
 		vkDeviceWaitIdle(context.device);
-		createPipeline();
+		createPipelines();
 	}
 }
 
@@ -226,7 +270,7 @@ void RayTracedShadowsPass::saveMaskToFile(const std::string& filename) const
 	m_outputMask->exportToFile(filename);
 }
 
-void RayTracedShadowsPass::createPipeline()
+void RayTracedShadowsPass::createPipelines()
 {
 	RayTracingShaderGroupGenerator shaderGroupGenerator;
 	shaderGroupGenerator.addRayGenShaderStage(0);
@@ -259,6 +303,18 @@ void RayTracedShadowsPass::createPipeline()
 	m_pipeline.reset(new Pipeline(pipelineCreateInfo, descriptorSetLayouts));
 
 	m_shaderBindingTable.reset(new ShaderBindingTable(static_cast<uint32_t>(shaders.size()), m_pipeline->getPipeline()));
+
+	// Debug
+	std::vector<char> debugComputeShaderCode;
+	m_debugComputeShaderParser->readCompiledShader(debugComputeShaderCode);
+
+	ShaderCreateInfo debugComputeShaderCreateInfo;
+	debugComputeShaderCreateInfo.shaderCode = debugComputeShaderCode;
+	debugComputeShaderCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	std::vector<VkDescriptorSetLayout> debugDescriptorSetLayouts(1);
+	debugDescriptorSetLayouts[0] = m_debugDescriptorSetLayout->getDescriptorSetLayout();
+	m_debugPipeline.reset(new Pipeline(debugComputeShaderCreateInfo, debugDescriptorSetLayouts));
 }
 
 void RayTracedShadowsPass::createDescriptorSet()
@@ -276,18 +332,37 @@ void RayTracedShadowsPass::createDescriptorSet()
 	if (!m_descriptorSet)
 		m_descriptorSet.reset(new DescriptorSet(m_descriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
 	m_descriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
+
+	DescriptorSetGenerator debugDescriptorSetGenerator(m_debugDescriptorSetLayoutGenerator.getDescriptorLayouts());
+	DescriptorSetGenerator::ImageDescription debugOutputImageDesc{ VK_IMAGE_LAYOUT_GENERAL, m_debugOutputImage->getDefaultImageView() };
+	debugDescriptorSetGenerator.setImage(0, debugOutputImageDesc);
+	DescriptorSetGenerator::ImageDescription denoisingPatternTextureDescription { VK_IMAGE_LAYOUT_GENERAL, m_denoiseSamplingPattern->getDefaultImageView() };
+	debugDescriptorSetGenerator.setImage(1, denoisingPatternTextureDescription);
+	debugDescriptorSetGenerator.setBuffer(2, *m_debugUniformBuffer);
+	debugDescriptorSetGenerator.setImage(3, preDepthImageDesc);
+
+	if (!m_debugDescriptorSet)
+		m_debugDescriptorSet.reset(new DescriptorSet(m_debugDescriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
+	m_debugDescriptorSet->update(debugDescriptorSetGenerator.getDescriptorSetCreateInfo());
 }
 
-void RayTracedShadowsPass::createOutputImage(uint32_t width, uint32_t height)
+void RayTracedShadowsPass::createOutputImages(uint32_t width, uint32_t height)
 {
 	CreateImageInfo createImageInfo;
 	createImageInfo.extent = { width, height, 1 };
 	createImageInfo.format = VK_FORMAT_R32_SFLOAT;
 	createImageInfo.mipLevelCount = 1;
 	createImageInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-	createImageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	createImageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT;
 	m_outputMask.reset(new Image(createImageInfo));
 	m_outputMask->setImageLayout({ VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR });
+
+	// Debug
+	createImageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+	createImageInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT; // needed to clear the image
+	createImageInfo.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+	m_debugOutputImage.reset(new Image(createImageInfo));
+	m_debugOutputImage->setImageLayout({ VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT });
 }
 
 float RayTracedShadowsPass::jitter()

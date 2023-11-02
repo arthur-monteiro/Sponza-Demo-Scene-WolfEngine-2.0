@@ -21,15 +21,15 @@ void Camera::update(GLFWwindow* window)
 		return;
 	}
 
-	auto currentTime = std::chrono::high_resolution_clock::now();
-	long long microsecondOffset = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - m_startTime).count();
-	float secondOffset = microsecondOffset / 1'000'000.0;
+	const auto currentTime = std::chrono::high_resolution_clock::now();
+	const long long microsecondOffset = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - m_startTime).count();
+	const float secondOffset = static_cast<float>(microsecondOffset) / 1'000'000.0f;
 	m_startTime = currentTime;
 
 	double currentMousePosX, currentMousePosY;
 	glfwGetCursorPos(window, &currentMousePosX, &currentMousePosY);
 
-	updateOrientation(currentMousePosX - m_oldMousePosX, currentMousePosY - m_oldMousePosY);
+	updateOrientation(static_cast<float>(currentMousePosX - m_oldMousePosX), static_cast<float>(currentMousePosY - m_oldMousePosY));
 	m_oldMousePosX = currentMousePosX;
 	m_oldMousePosY = currentMousePosY;
 
@@ -58,14 +58,17 @@ void Camera::update(GLFWwindow* window)
 
 	m_previousViewMatrix = m_viewMatrix;
 	m_viewMatrix = glm::lookAt(m_position, m_target, m_verticalAxis);
+
+	m_projectionMatrix = glm::perspective(m_radFOV, m_aspect, m_near, m_far);
+	m_projectionMatrix[1][1] *= -1;
 }
 
-glm::mat4 Camera::getViewMatrix() const
+const glm::mat4& Camera::getViewMatrix() const
 {
 	return m_viewMatrix;
 }
 
-glm::mat4 Camera::getPreviousViewMatrix() const
+const glm::mat4& Camera::getPreviousViewMatrix() const
 {
 	return m_previousViewMatrix;
 }
@@ -75,15 +78,12 @@ glm::vec3 Camera::getPosition() const
 	return m_position;
 }
 
-glm::mat4 Camera::getProjectionMatrix() const
+const glm::mat4& Camera::getProjectionMatrix() const
 {
 	if (m_overrideViewMatrices)
 		return m_overridenProjectionMatrix;
 
-	glm::mat4 r = glm::perspective(m_radFOV, m_aspect, m_near, m_far);
-	r[1][1] *= -1;
-
-	return r;
+	return m_projectionMatrix;
 }
 
 void Camera::overrideMatrices(const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix)
@@ -95,7 +95,7 @@ void Camera::overrideMatrices(const glm::mat4& viewMatrix, const glm::mat4& proj
 	m_overrideViewMatrices = true;
 }
 
-void Camera::updateOrientation(int xOffset, int yOffset)
+void Camera::updateOrientation(float xOffset, float yOffset)
 {
 	m_phi -= yOffset * m_sensibility;
 	m_theta -= xOffset * m_sensibility;

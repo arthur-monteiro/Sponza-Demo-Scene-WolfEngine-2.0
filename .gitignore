@@ -374,6 +374,7 @@ FodyWeavers.xsd
 *Parsed.rmiss
 *Parsed.rchit
 *Parsed.comp
+*.dmp
 
 # Project Generated
 Exports/

@@ -14,7 +14,7 @@
 #include <ShaderParser.h>
 
 class SceneElements;
-class DepthPass;
+class PreDepthPass;
 
 class CascadeDepthPass : public Wolf::DepthPassBase
 {

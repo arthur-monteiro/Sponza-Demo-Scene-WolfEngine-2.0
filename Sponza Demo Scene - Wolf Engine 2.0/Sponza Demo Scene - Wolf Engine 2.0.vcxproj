@@ -104,14 +104,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\Third Party\glm;..\..\Wolf Engine 2.0\Wolf Engine 2.0\Wolf Engine 2.0;..\Third Party\vulkan\Include;..\Third Party\freetype-2.8.1\include\freetype2;..\Third Party\stb_image;..\Third Party\tiny_obj;..\Third Party\GLFW\include;..\Third Party\OVR\Include;..\Third Party\UltraLight\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\glm;..\..\Wolf Engine 2.0\Wolf Engine 2.0\Wolf Engine 2.0;..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\vulkan\Include;..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\freetype-2.8.1\include\freetype2;..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\stb_image;..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\tiny_obj;..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\GLFW\include;..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\OVR\Include;..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\UltraLight\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\x64\Debug;..\Third Party\OVR\Lib\Windows\x64\Debug\VS2017;..\Third Party\freetype-2.8.1\lib\x64;..\Third Party\GLFW\lib-vc2019;..\Third Party\vulkan\Lib;..\Third Party\Wolf Engine\lib;..\Third Party\UltraLight\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>freetype.lib;vulkan-1.lib;glfw3.lib;LibOVR.lib;UltralightCore.lib;Ultralight.lib;WebCore.lib;AppCore.lib;Engine Core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\x64\Debug;..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\OVR\Lib\Windows\x64\Debug\VS2017;..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\GLFW\lib-vc2019;..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\vulkan\Lib;..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\Wolf Engine\lib;..\..\Wolf Engine 2.0\Wolf Engine 2.0\ThirdParty\UltraLight\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;LibOVR.lib;UltralightCore.lib;Ultralight.lib;WebCore.lib;AppCore.lib;Engine Core.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -135,14 +135,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Camera.cpp" />
     <ClCompile Include="CascadedShadowMapping.cpp" />
+    <ClCompile Include="CommonLayout.cpp" />
     <ClCompile Include="PreDepthPass.cpp" />
     <ClCompile Include="ForwardPass.cpp" />
     <ClCompile Include="LoadingScreenUniquePass.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="RayTracedShadowsPass.cpp" />
-    <ClCompile Include="SceneElements.cpp" />
+    <ClCompile Include="RTGIPass.cpp" />
     <ClCompile Include="ShadowMaskBasePass.cpp" />
     <ClCompile Include="ShadowMaskComputePass.cpp" />
     <ClCompile Include="ObjectModel.cpp" />
@@ -151,14 +151,14 @@
     <ClCompile Include="TemporalAntiAliasingPass.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Camera.h" />
     <ClInclude Include="CascadedShadowMapping.h" />
+    <ClInclude Include="CommonLayout.h" />
     <ClInclude Include="PreDepthPass.h" />
     <ClInclude Include="ForwardPass.h" />
     <ClInclude Include="GameContext.h" />
     <ClInclude Include="LoadingScreenUniquePass.h" />
     <ClInclude Include="RayTracedShadowsPass.h" />
-    <ClInclude Include="SceneElements.h" />
+    <ClInclude Include="RTGIPass.h" />
     <ClInclude Include="ShadowMaskBasePass.h" />
     <ClInclude Include="ShadowMaskComputePass.h" />
     <ClInclude Include="ObjectModel.h" />

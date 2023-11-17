@@ -60,7 +60,7 @@ float computeShadows()
 {
     //return imageLoad(shadowMask, ivec2(gl_FragCoord.xy)).r;
 
-    vec3 refWorldPos = (ubLighting.invView * vec4(inViewPos, 1.0f)).xyz;
+    vec3 refWorldPos = (getInvViewMatrix() * vec4(inViewPos, 1.0f)).xyz;
 
     float totalWeight = 0.0;
     float sumShadows = 0.0;
@@ -73,11 +73,11 @@ float computeShadows()
             vec2 pixelCoords = gl_FragCoord.xy + vec2(offsetX, offsetY);
             vec2 pixelUV = pixelCoords / float(ubLighting.outputSize.x);
             vec2 clip = pixelUV * 2.0 - 1.0;
-            vec4 viewRay = ubLighting.invProjection * vec4(clip.x, clip.y, 1.0, 1.0);
+            vec4 viewRay = getInvProjectionMatrix() * vec4(clip.x, clip.y, 1.0, 1.0);
             float depth = texture(sampler2D(depthTexture, textureSampler), pixelUV).r;
             float linearDepth = linearizeDepth(depth);
             vec3 viewPos = viewRay.xyz * linearDepth;
-            vec3 sampleWorldPos = (ubLighting.invView * vec4(viewPos, 1.0f)).xyz;
+            vec3 sampleWorldPos = (getInvViewMatrix() * vec4(viewPos, 1.0f)).xyz;
 
             float sampleWeight = 0.5; //computeSampleWeight(refWorldPos, linearDepth, pixelUV, sampleWorldPos);
             sumShadows += imageLoad(shadowMask, ivec2(pixelCoords)).r * sampleWeight;
@@ -86,7 +86,7 @@ float computeShadows()
     }
 
     // Second step: world space blur
-    computeSamplePositions(inWorldSpaceNormal, refWorldPos, ubLighting.invView, ubMVP.view, ubMVP.projection);
+    computeSamplePositions(inWorldSpaceNormal, refWorldPos, getInvViewMatrix(), getViewMatrix(), getProjectionMatrix());
 
     for(int i = 0; i < DENOISE_TEXTURE_SIZE; ++i)
     {

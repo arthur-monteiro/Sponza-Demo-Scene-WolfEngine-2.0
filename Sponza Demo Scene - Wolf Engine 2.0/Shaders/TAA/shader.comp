@@ -1,4 +1,3 @@
-#version 460
 #extension GL_EXT_samplerless_texture_functions : require
 
 layout (binding = 0, rgba8) uniform readonly image2D previousImage;

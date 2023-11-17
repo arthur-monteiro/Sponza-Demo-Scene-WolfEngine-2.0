@@ -54,23 +54,5 @@ private:
 	double m_sunTheta = 0.0, m_sunPhi = 0.0;
 	double m_sunAreaAngle = 0.01;
 	bool m_TAAEnabled = true;
-	const glm::vec2 JITTER_OFFSET[16] = {
-		glm::vec2(0.500000f, 0.333333f),
-		glm::vec2(0.250000f, 0.666667),
-		glm::vec2(0.750000f, 0.111111f),
-		glm::vec2(0.125000f, 0.444444f),
-		glm::vec2(0.625000f, 0.777778f),
-		glm::vec2(0.375000f, 0.222222f),
-		glm::vec2(0.875000f, 0.555556f),
-		glm::vec2(0.062500f, 0.888889f),
-		glm::vec2(0.562500f, 0.037037f),
-		glm::vec2(0.312500f, 0.370370f),
-		glm::vec2(0.812500f, 0.703704f),
-		glm::vec2(0.187500f, 0.148148f),
-		glm::vec2(0.687500f, 0.481481f),
-		glm::vec2(0.437500f, 0.814815f),
-		glm::vec2(0.937500f, 0.259259f),
-		glm::vec2(0.031250f, 0.592593)
-	};
 };
 

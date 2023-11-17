@@ -6,7 +6,10 @@
 #include <DescriptorSetGenerator.h>
 #include <ObjLoader.h>
 
+#include "CameraList.h"
+#include "CommonLayout.h"
 #include "DebugMarker.h"
+#include "GraphicCameraInterface.h"
 #include "PreDepthPass.h"
 
 using namespace Wolf;
@@ -22,7 +25,7 @@ void ShadowMaskComputePass::initializeResources(const Wolf::InitializationContex
 	m_commandBuffer.reset(new CommandBuffer(QueueType::COMPUTE, false /* isTransient */));
 	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT));
 
-	m_computeShaderParser.reset(new ShaderParser("Shaders/cascadedShadowMapping/shader.comp"));
+	m_computeShaderParser.reset(new ShaderParser("Shaders/cascadedShadowMapping/shader.comp", {}, 1));
 
 	m_descriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 0, 1); // input depth
 	m_descriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_COMPUTE_BIT, 1);
@@ -92,19 +95,11 @@ void ShadowMaskComputePass::resize(const Wolf::InitializationContext& context)
 void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 {
 	uint32_t currentMaskIdx = context.currentFrameIdx % MASK_COUNT;
+	const CameraInterface* camera = context.cameraList->getCamera(CommonCameraIndices::CAMERA_IDX_ACTIVE);
 
 	/* Update data */
 	ShadowUBData shadowUBData;
-	shadowUBData.invView = glm::inverse(context.camera->getViewMatrix());
-	shadowUBData.invProjection = glm::inverse(context.camera->getProjectionMatrix());
-	shadowUBData.previousMVPMatrix = context.camera->getProjectionMatrix() * context.camera->getPreviousViewMatrix();
-
-	const float near = context.camera->getNear();
-	const float far = context.camera->getFar();
-	shadowUBData.projectionParams.x = far / (far - near);
-	shadowUBData.projectionParams.y = (-far * near) / (far - near);
-
-	shadowUBData.cascadeSplits = glm::vec4(m_csmManager->getCascadeSplit(0), m_csmManager->getCascadeSplit(1), m_csmManager->getCascadeSplit(2), m_csmManager->getCascadeSplit(3));
+		shadowUBData.cascadeSplits = glm::vec4(m_csmManager->getCascadeSplit(0), m_csmManager->getCascadeSplit(1), m_csmManager->getCascadeSplit(2), m_csmManager->getCascadeSplit(3));
 	for (uint32_t cascadeIdx = 0; cascadeIdx < CascadedShadowMapping::CASCADE_COUNT; ++cascadeIdx)
 	{
 		m_csmManager->getCascadeMatrix(cascadeIdx, shadowUBData.cascadeMatrices[cascadeIdx]);
@@ -132,6 +127,9 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 
 	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline->getPipelineLayout(), 0, 1, 
 		m_descriptorSets[currentMaskIdx]->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
+
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline->getPipelineLayout(), 1, 1,
+		camera->getDescriptorSet()->getDescriptorSet(), 0, nullptr);
 
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline->getPipeline());
 
@@ -183,8 +181,9 @@ void ShadowMaskComputePass::createPipeline()
 	computeShaderCreateInfo.shaderCode = computeShaderCode;
 	computeShaderCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 
-	std::vector<VkDescriptorSetLayout> descriptorSetLayouts(1);
+	std::vector<VkDescriptorSetLayout> descriptorSetLayouts(2);
 	descriptorSetLayouts[0] = m_descriptorSetLayout->getDescriptorSetLayout();
+	descriptorSetLayouts[1] = GraphicCameraInterface::getDescriptorSetLayout();
 	m_pipeline.reset(new Pipeline(computeShaderCreateInfo, descriptorSetLayouts));
 }
 

@@ -1,15 +1,14 @@
 #pragma once
 
+#include <FirstPersonCamera.h>
 #include <WolfEngine.h>
 
-#include "Camera.h"
 #include "CascadedShadowMapping.h"
 #include "PreDepthPass.h"
 #include "ForwardPass.h"
 #include "InputHandler.h"
-#include "ForwardPass.h"
 #include "RayTracedShadowsPass.h"
-#include "SceneElements.h"
+#include "RTGIPass.h"
 #include "ShadowMaskComputePass.h"
 #include "TemporalAntiAliasingPass.h"
 
@@ -20,7 +19,7 @@ class SponzaScene
 public:
 	SponzaScene(Wolf::WolfEngine* wolfInstance, std::mutex* vulkanQueueLock);
 
-	void update(const Wolf::WolfEngine* wolfInstance, GameContext& gameContext);
+	void update(Wolf::WolfEngine* wolfInstance, GameContext& gameContext);
 	void frame(Wolf::WolfEngine* wolfInstance) const;
 
 	enum class ShadowType
@@ -32,14 +31,18 @@ public:
 	void setDebugMode(ForwardPass::DebugMode debugMode) { m_nextPassState.debugMode = debugMode; }
 
 private:
-	std::chrono::high_resolution_clock::time_point m_startTime = std::chrono::high_resolution_clock::now();
+	void initializePipelineSets(const Wolf::WolfEngine* wolfInstance, const ShadowMaskBasePass* shadowMaskPass);
 
-	SceneElements m_sceneElements;
+	std::chrono::high_resolution_clock::time_point m_startTime = std::chrono::high_resolution_clock::now();
+	
 	std::unique_ptr<ObjectModel> m_sponzaModel;
 	std::unique_ptr<ObjectModel> m_cubeModel;
 	std::array<std::unique_ptr<Wolf::Image>, 5> m_cubeImages;
-	std::unique_ptr<Camera> m_camera;
+	std::unique_ptr<Wolf::FirstPersonCamera> m_camera;
 	bool m_isLocked = false;
+
+	// Pipeline sets
+	std::unique_ptr<Wolf::PipelineSet> m_sponzaPipelineSet;
 
 	// PreDepth
 	std::unique_ptr<PreDepthPass> m_preDepthPass;
@@ -51,6 +54,9 @@ private:
 
 	// Direct lighting
 	std::unique_ptr<ForwardPass> m_forwardPass;
+
+	// Global Illumination
+	std::unique_ptr<RTGIPass> m_rayTracedGlobalIlluminationPass;
 
 	// Post process
 	std::unique_ptr<TemporalAntiAliasingPass> m_taaComposePass;

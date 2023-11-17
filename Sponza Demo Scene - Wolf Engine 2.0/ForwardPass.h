@@ -20,12 +20,13 @@
 
 class PreDepthPass;
 class ObjectModel;
+class RTGIPass;
 class SceneElements;
 
 class ForwardPass : public Wolf::CommandRecordBase
 {
 public:
-	ForwardPass(const SceneElements& sceneElements, PreDepthPass* preDepthPass, ShadowMaskBasePass* shadowMaskPass);
+	ForwardPass(PreDepthPass* preDepthPass, ShadowMaskBasePass* shadowMaskPass, RTGIPass* rayTracedGIPass);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
@@ -45,8 +46,6 @@ private:
 	void createOrUpdateDebugDescriptorSet();
 
 private:
-	const SceneElements& m_sceneElements;
-
 	std::unique_ptr<Wolf::RenderPass> m_renderPass;
 	PreDepthPass* m_preDepthPass;
 
@@ -55,15 +54,12 @@ private:
 	
 	const Wolf::Semaphore* m_preDepthPassSemaphore;
 	ShadowMaskBasePass* m_shadowMaskPass;
+	RTGIPass* m_rayTracedGIPass;
 
 	/* Pipeline */
-	std::unique_ptr<Wolf::ShaderParser> m_vertexShaderParser;
-	std::unique_ptr<Wolf::ShaderParser> m_fragmentShaderParser;
-
 	std::unique_ptr<Wolf::ShaderParser> m_userInterfaceVertexShaderParser;
 	std::unique_ptr<Wolf::ShaderParser> m_userInterfaceFragmentShaderParser;
-
-	std::unique_ptr<Wolf::Pipeline> m_pipeline;
+	
 	std::unique_ptr<Wolf::Pipeline> m_drawFullScreenImagePipeline;
 	uint32_t m_swapChainWidth;
 	uint32_t m_swapChainHeight;
@@ -80,12 +76,6 @@ private:
 		float padding2;
 
 		glm::uvec2 outputSize;
-		float near;
-		float far;
-
-		glm::mat4 invView;
-
-		glm::mat4 invProjection;
 	};
 	std::unique_ptr<Wolf::Buffer> m_lightUniformBuffer;
 

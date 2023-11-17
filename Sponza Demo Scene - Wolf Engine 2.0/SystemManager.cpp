@@ -2,8 +2,6 @@
 
 #include <iostream>
 
-#include <TextFileReader.h>
-
 using namespace Wolf;
 
 SystemManager::SystemManager()
@@ -46,10 +44,7 @@ void SystemManager::run()
 			gameContext.sunPhi = static_cast<float>(m_sunPhi);
 			gameContext.sunTheta = static_cast<float>(m_sunTheta);
 			gameContext.sunAreaAngle = static_cast<float>(m_sunAreaAngle);
-			gameContext.pixelJitter.x = ((JITTER_OFFSET[m_wolfInstance->getCurrentFrame() % std::size(JITTER_OFFSET)].x - 0.5f) * 2.0f) / static_cast<float>(m_wolfInstance->getSwapChainExtent().width);
-			gameContext.pixelJitter.y = ((JITTER_OFFSET[m_wolfInstance->getCurrentFrame() % std::size(JITTER_OFFSET)].y - 0.5f) * 2.0f) / static_cast<float>(m_wolfInstance->getSwapChainExtent().height);
-			if (!m_TAAEnabled)
-				gameContext.pixelJitter = glm::vec2(0.0f, 0.0f);
+			gameContext.enableTAA = m_TAAEnabled;
 
 			m_sponzaScene->update(m_wolfInstance.get(), gameContext);
 			m_sponzaScene->frame(m_wolfInstance.get());
@@ -77,6 +72,7 @@ void SystemManager::createWolfInstance()
 	wolfInstanceCreateInfo.debugCallback = debugCallback;
 	wolfInstanceCreateInfo.htmlURL = "UI/UI.html";
 	wolfInstanceCreateInfo.bindUltralightCallbacks = [this] { bindUltralightCallbacks(); };
+	wolfInstanceCreateInfo.useBindlessDescriptor = true;
 
 	m_wolfInstance.reset(new WolfEngine(wolfInstanceCreateInfo));
 	bindUltralightCallbacks();
@@ -183,6 +179,8 @@ void SystemManager::setDebugMode(const ultralight::JSObject& thisObject, const u
 		debugMode = ForwardPass::DebugMode::None;
 	else if (strDebugMode == "shadows")
 		debugMode = ForwardPass::DebugMode::Shadows;
+	/*else if (strDebugMode == "RTGI")
+		debugMode = ForwardPass::DebugMode::RTGI;*/
 	else
 		Debug::sendError("Unsupported debug mode");
 

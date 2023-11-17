@@ -1,4 +1,3 @@
-#version 460
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_samplerless_texture_functions : require
 
@@ -7,13 +6,9 @@ layout(binding = 1, set = 0, r32f) uniform image2D image;
 layout(binding = 2, set = 0) uniform texture2D depthImage;
 layout(binding = 3, set = 0) uniform UniformBuffer
 {
-    mat4 invModelView;
-    mat4 invProjection;
-	vec4 projectionParams;
     vec4 sunDirectionAndNoiseIndex;
     uint drawWithoutNoiseFrameIndex;
     float sunAreaAngle;
-    vec2 jitter;
 } ub;
 layout(binding = 4) uniform sampler3D noiseTexture;
 layout(location = 0) rayPayloadEXT bool isShadowed;
@@ -34,13 +29,13 @@ void main()
     const vec2 pixelPos = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
     const vec2 inUV = pixelPos / vec2(gl_LaunchSizeEXT.xy);
     vec2 d = inUV * 2.0 - 1.0;
-    d -= ub.jitter;
+    d -= getCameraJitter();
 
-    vec4 viewRay = ub.invProjection * vec4(d.x, d.y, 1.0, 1.0);
+    vec4 viewRay = getInvProjectionMatrix() * vec4(d.x, d.y, 1.0, 1.0);
     float depth = texelFetch(depthImage, ivec2(gl_LaunchIDEXT.xy), 0).r;
-    float linearDepth = ub.projectionParams.y / (depth - ub.projectionParams.x);
+    float linearDepth = getProjectionParams().y / (depth - getProjectionParams().x);
     vec3 viewPos = viewRay.xyz * linearDepth;
-	vec4 rawPos = ub.invModelView * vec4(viewPos, 1.0);
+	vec4 rawPos = getInvViewMatrix() * vec4(viewPos, 1.0);
 
     vec4 origin = rawPos;
 

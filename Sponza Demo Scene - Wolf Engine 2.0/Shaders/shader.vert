@@ -1,13 +1,8 @@
-#version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-const uint MAX_MODELS = 2;
-layout(binding = 0) uniform UniformBufferMVP
+layout(binding = 0, set = 0) uniform UniformBufferMVP
 {
-    mat4 models[MAX_MODELS];
-	mat4 view;
-	mat4 projection;
-	vec2 jitter;
+    mat4 model;
 } ubMVP;
 
 layout(location = 0) in vec3 inPosition;
@@ -28,22 +23,14 @@ out gl_PerVertex
     vec4 gl_Position;
 };
 
-const mat4 biasMat = mat4( 
-	0.5, 0.0, 0.0, 0.0,
-	0.0, 0.5, 0.0, 0.0,
-	0.0, 0.0, 1.0, 0.0,
-	0.5, 0.5, 0.0, 1.0 );
-
 void main() 
 {
-	uint modelIdx = inMaterialID >= 24 ? 1 : 0;
+	vec4 viewPos = getViewMatrix() * ubMVP.model * vec4(inPosition, 1.0);
 
-	vec4 viewPos = ubMVP.view * ubMVP.models[modelIdx] * vec4(inPosition, 1.0);
+    gl_Position = getProjectionMatrix() * viewPos;
+	gl_Position.xy += getCameraJitter() * gl_Position.w;
 
-    gl_Position = ubMVP.projection * viewPos;
-	gl_Position.xy += ubMVP.jitter * gl_Position.w;
-
-	mat3 usedModelMatrix = transpose(inverse(mat3(ubMVP.view * ubMVP.models[modelIdx])));
+	mat3 usedModelMatrix = transpose(inverse(mat3(getViewMatrix() * ubMVP.model)));
     vec3 n = normalize(usedModelMatrix * inNormal);
 	vec3 t = normalize(usedModelMatrix * inTangent);
 	t = normalize(t - dot(t, n) * n);

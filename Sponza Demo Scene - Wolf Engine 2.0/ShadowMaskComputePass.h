@@ -53,14 +53,6 @@ private:
 	CascadedShadowMapping* m_csmManager;
 	struct ShadowUBData
 	{
-		glm::mat4 invView;
-
-		glm::mat4 invProjection;
-
-		glm::vec4 projectionParams;
-
-		glm::mat4 previousMVPMatrix;
-
 		glm::uvec2 screenSize;
 		glm::vec2 padding;
 

@@ -24,9 +24,6 @@
     <ClCompile Include="ObjectModel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Camera.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="LoadingScreenUniquePass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -51,10 +48,13 @@
     <ClCompile Include="ShadowMaskBasePass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="SceneElements.cpp">
+    <ClCompile Include="TemporalAntiAliasingPass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="TemporalAntiAliasingPass.cpp">
+    <ClCompile Include="RTGIPass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CommonLayout.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -66,9 +66,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ObjectModel.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Camera.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="LoadingScreenUniquePass.h">
@@ -98,10 +95,13 @@
     <ClInclude Include="ShadowMaskBasePass.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="SceneElements.h">
+    <ClInclude Include="TemporalAntiAliasingPass.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="TemporalAntiAliasingPass.h">
+    <ClInclude Include="RTGIPass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CommonLayout.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

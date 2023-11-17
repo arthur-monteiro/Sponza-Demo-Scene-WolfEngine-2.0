@@ -1,4 +1,3 @@
-#version 450
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_EXT_nonuniform_qualifier : enable
 
@@ -11,51 +10,38 @@ layout (location = 3) in mat3 inTBN;
 layout (location = 6) in vec3 inWorldSpaceNormal;
 layout (location = 7) in vec3 inWorldSpacePos;
 
-const uint MAX_MODELS = 2;
-layout(binding = 0) uniform UniformBufferMVP
+layout(binding = 0, set = 0) uniform UniformBufferMVP
 {
-    mat4 models[MAX_MODELS];
-	mat4 view;
-	mat4 projection;
-    vec2 jitter;
+    mat4 model;
 } ubMVP;
-layout (binding = 1) uniform sampler textureSampler;
-layout (binding = 2) uniform texture2D[] textures;
-layout (binding = 3, r32f) uniform image2D shadowMask;
+layout (binding = 3, set = 3, r32f) uniform image2D shadowMask;
 
-layout(binding = 4, std140) uniform readonly UniformBufferLighting
+layout(binding = 4, set = 3, std140) uniform readonly UniformBufferLighting
 {
 	vec3 directionDirectionalLight;
 
 	vec3 colorDirectionalLight;
 
     uvec2 outputSize;
-    float near;
-    float far;
-
-    mat4 invView;
-    mat4 invProjection;
 } ubLighting;
 
+layout (binding = 0, set = 2) uniform texture2D[] textures;
+layout (binding = 1, set = 2) uniform sampler textureSampler;
+
 #if RAYTRACED_SHADOWS
-layout (binding = 5) uniform texture2D depthTexture;
-layout (binding = 6, rg32f) uniform image2D denoisingSamplingPattern;
+layout (binding = 5, set = 3) uniform texture2D depthTexture;
+layout (binding = 6, set = 3, rg32f) uniform image2D denoisingSamplingPattern;
 #endif
 
 layout (location = 0) out vec4 outColor;
 
 #include "ShaderCommon.glsl"
 
-float linearizeDepth(float d)
-{
-    return ubLighting.near * ubLighting.far / (ubLighting.far - d * (ubLighting.far - ubLighting.near));
-}
-
 #if RAYTRACED_SHADOWS
 vec3 viewPosFromDepth(vec2 screenSpaceUV)
 {
     vec2 d = screenSpaceUV * 2.0f - 1.0f;
-    vec4 viewRay = ubLighting.invProjection * vec4(d.x, d.y, 1.0, 1.0);
+    vec4 viewRay = getInvProjectionMatrix() * vec4(d.x, d.y, 1.0, 1.0);
     float linearDepth = linearizeDepth(texture(sampler2D(depthTexture, textureSampler), screenSpaceUV).r);
 
     return viewRay.xyz * linearDepth;

@@ -14,7 +14,7 @@ class SceneElements;
 class PreDepthPass : public Wolf::CommandRecordBase, public Wolf::DepthPassBase
 {
 public:
-	PreDepthPass(const SceneElements& sceneElements, bool copyOutput);
+	PreDepthPass(bool copyOutput) : m_copyOutput(copyOutput) {}
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
@@ -25,7 +25,6 @@ public:
 	Wolf::Image* getCopy() const { return m_copyImage.get(); }
 
 private:
-	void createPipeline();
 	void createCopyImage(VkFormat format);
 
 	uint32_t getWidth() override { return m_swapChainWidth; }
@@ -37,17 +36,11 @@ private:
 	VkCommandBuffer getCommandBuffer(const Wolf::RecordContext& context) override;
 
 private:
-	const SceneElements& m_sceneElements;
-
 	/* Pipeline */
-	std::unique_ptr<Wolf::Pipeline> m_pipeline;
-	std::unique_ptr<Wolf::ShaderParser> m_vertexShaderParser;
 	uint32_t m_swapChainWidth{};
 	uint32_t m_swapChainHeight{};
 
 	/* Resources */
-	std::unique_ptr<Wolf::DescriptorSetLayout> m_descriptorSetLayout;
-	std::unique_ptr<Wolf::DescriptorSet> m_descriptorSet;
 	std::unique_ptr<Wolf::Image> m_copyImage;
 
 	/* Params */

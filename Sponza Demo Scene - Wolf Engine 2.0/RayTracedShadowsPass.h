@@ -10,6 +10,8 @@
 #include <ShaderBindingTable.h>
 #include <ShaderParser.h>
 
+#include "CameraInterface.h"
+
 class PreDepthPass;
 class ObjectModel;
 class SharedGPUResources;
@@ -59,14 +61,10 @@ private:
 
 	struct ShadowUBData
 	{
-		glm::mat4 invModelView;
-		glm::mat4 invProjection;
-		glm::vec4 projectionParams;
 		glm::vec4 sunDirectionAndNoiseIndex;
 
 		glm::uint drawWithoutNoiseFrameIndex; // 0 = draw with noise
 		float sunAreaAngle;
-		glm::vec2 jitter;
 	};
 	std::unique_ptr<Wolf::Buffer> m_uniformBuffer;
 	std::unique_ptr<Wolf::Image> m_outputMask;
@@ -90,12 +88,6 @@ private:
 	std::unique_ptr<Wolf::DescriptorSet> m_debugDescriptorSet;
 	struct DebugUBData
 	{
-		glm::mat4 view;
-		glm::mat4 invView;
-		glm::mat4 projection;
-		glm::mat4 invProjection;
-		glm::vec4 projectionParams;
-
 		glm::vec3 worldSpaceNormal;
 		float padding;
 		glm::vec2 pixelUV;
@@ -106,4 +98,3 @@ private:
 
 	std::unique_ptr<Wolf::Pipeline> m_debugPipeline;
 };
-

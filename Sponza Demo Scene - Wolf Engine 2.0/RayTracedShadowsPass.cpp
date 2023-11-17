@@ -9,9 +9,12 @@
 #include <DescriptorSetLayoutGenerator.h>
 #include <RayTracingShaderGroupGenerator.h>
 
+#include "CameraList.h"
+#include "CommonLayout.h"
 #include "DebugMarker.h"
 #include "PreDepthPass.h"
 #include "GameContext.h"
+#include "GraphicCameraInterface.h"
 #include "ObjectModel.h"
 
 using namespace Wolf;
@@ -27,7 +30,7 @@ void RayTracedShadowsPass::initializeResources(const InitializationContext& cont
 	m_commandBuffer.reset(new CommandBuffer(QueueType::RAY_TRACING, false /* isTransient */));
 	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR));
 
-	m_rayGenShaderParser.reset(new ShaderParser("Shaders/rayTracedShadows/shader.rgen"));
+	m_rayGenShaderParser.reset(new ShaderParser("Shaders/rayTracedShadows/shader.rgen", {}, 1));
 	m_rayMissShaderParser.reset(new ShaderParser("Shaders/rayTracedShadows/shader.rmiss"));
 	m_closestHitShaderParser.reset(new ShaderParser("Shaders/rayTracedShadows/shader.rchit"));
 
@@ -93,7 +96,7 @@ void RayTracedShadowsPass::initializeResources(const InitializationContext& cont
 	m_denoiseSamplingPattern->copyCPUBuffer(reinterpret_cast<unsigned char*>(samplingPoints.data()), { VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_READ_BIT , VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT });
 
 	// Debug
-	m_debugComputeShaderParser.reset(new ShaderParser("Shaders/rayTracedShadows/debug.comp"));
+	m_debugComputeShaderParser.reset(new ShaderParser("Shaders/rayTracedShadows/debug.comp", {}, 1));
 
 	m_debugDescriptorSetLayoutGenerator.addStorageImage(VK_SHADER_STAGE_COMPUTE_BIT, 0); // output
 	m_debugDescriptorSetLayoutGenerator.addImages(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 1, 1); // denoising sampling pattern
@@ -120,6 +123,7 @@ static uint32_t imageCounter = 101;
 void RayTracedShadowsPass::record(const RecordContext& context)
 {
 	const GameContext* gameContext = static_cast<const GameContext*>(context.gameContext);
+	const CameraInterface* camera = context.cameraList->getCamera(CommonCameraIndices::CAMERA_IDX_ACTIVE);
 
 	if (gameContext->shadowmapScreenshotsRequested)
 	{
@@ -148,12 +152,12 @@ void RayTracedShadowsPass::record(const RecordContext& context)
 				exportPositionsFile << "View matrix: ";
 				for(uint32_t i = 0; i < 4; ++i)
 					for(uint32_t j = 0; j < 4; ++j)
-						exportPositionsFile << context.camera->getViewMatrix()[i][j] << ";";
+						exportPositionsFile << camera->getViewMatrix()[i][j] << ";";
 
 				exportPositionsFile << "\nProjection matrix: ";
 				for (uint32_t i = 0; i < 4; ++i)
 					for (uint32_t j = 0; j < 4; ++j)
-						exportPositionsFile << context.camera->getProjectionMatrix()[i][j] << ";";
+						exportPositionsFile << camera->getProjectionMatrix()[i][j] << ";";
 
 				exportPositionsFile << "\nSun phi/theta: ";
 				exportPositionsFile << gameContext->sunPhi << ";" << gameContext->sunTheta;
@@ -167,25 +171,13 @@ void RayTracedShadowsPass::record(const RecordContext& context)
 
 	/* Update data */
 	ShadowUBData shadowUBData;
-	shadowUBData.invModelView = glm::inverse(context.camera->getViewMatrix());
-	shadowUBData.invProjection = glm::inverse(context.camera->getProjectionMatrix());
-	const float near = context.camera->getNear();
-	const float far = context.camera->getFar();
-	shadowUBData.projectionParams.x = far / (far - near);
-	shadowUBData.projectionParams.y = (-far * near) / (far - near);
 	shadowUBData.sunDirectionAndNoiseIndex = glm::vec4(-gameContext->sunDirection, context.currentFrameIdx % NOISE_TEXTURE_VECTOR_COUNT);
 	shadowUBData.drawWithoutNoiseFrameIndex = frameCounter;
 	shadowUBData.sunAreaAngle = gameContext->sunAreaAngle;
-	shadowUBData.jitter = gameContext->pixelJitter;
 
 	m_uniformBuffer->transferCPUMemory(&shadowUBData, sizeof(shadowUBData), 0, context.commandBufferIdx);
 
 	DebugUBData debugUBData;
-	debugUBData.view = context.camera->getViewMatrix();
-	debugUBData.invView = shadowUBData.invModelView;
-	debugUBData.projection = context.camera->getProjectionMatrix();
-	debugUBData.invProjection = shadowUBData.invProjection;
-	debugUBData.projectionParams = shadowUBData.projectionParams;
 	debugUBData.worldSpaceNormal = glm::vec3(0.0f, 1.0f, 0.0f);
 	debugUBData.pixelUV = glm::vec2(0.5f, 0.5f);
 	debugUBData.patternSize = glm::vec2(m_denoiseSamplingPattern->getExtent().width, m_denoiseSamplingPattern->getExtent().height);
@@ -198,7 +190,10 @@ void RayTracedShadowsPass::record(const RecordContext& context)
 	DebugMarker::beginRegion(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), DebugMarker::rayTracePassDebugColor, "Ray Trace Shadow Pass");
 
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_pipeline->getPipeline());
-	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_pipeline->getPipelineLayout(), 0, 1, m_descriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_pipeline->getPipelineLayout(), 0, 1, 
+		m_descriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_pipeline->getPipelineLayout(), 1, 1,
+		camera->getDescriptorSet()->getDescriptorSet(), 0, nullptr);
 
 	VkStridedDeviceAddressRegionKHR rgenRegion{};
 	rgenRegion.deviceAddress = m_shaderBindingTable->getBuffer().getBufferDeviceAddress();
@@ -232,6 +227,8 @@ void RayTracedShadowsPass::record(const RecordContext& context)
 
 	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_debugPipeline->getPipelineLayout(), 0, 1,
 		m_debugDescriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
+	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_debugPipeline->getPipelineLayout(), 1, 1,
+		camera->getDescriptorSet()->getDescriptorSet(), 0, nullptr);
 
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_COMPUTE, m_debugPipeline->getPipeline());
 
@@ -299,7 +296,7 @@ void RayTracedShadowsPass::createPipelines()
 
 	pipelineCreateInfo.shaderGroupsCreateInfos = shaderGroupGenerator.getShaderGroups();
 
-	std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { m_descriptorSetLayout->getDescriptorSetLayout() };
+	std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { m_descriptorSetLayout->getDescriptorSetLayout(), GraphicCameraInterface::getDescriptorSetLayout() };
 	m_pipeline.reset(new Pipeline(pipelineCreateInfo, descriptorSetLayouts));
 
 	m_shaderBindingTable.reset(new ShaderBindingTable(static_cast<uint32_t>(shaders.size()), m_pipeline->getPipeline()));
@@ -312,15 +309,14 @@ void RayTracedShadowsPass::createPipelines()
 	debugComputeShaderCreateInfo.shaderCode = debugComputeShaderCode;
 	debugComputeShaderCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 
-	std::vector<VkDescriptorSetLayout> debugDescriptorSetLayouts(1);
-	debugDescriptorSetLayouts[0] = m_debugDescriptorSetLayout->getDescriptorSetLayout();
+	std::vector<VkDescriptorSetLayout> debugDescriptorSetLayouts = { m_debugDescriptorSetLayout->getDescriptorSetLayout(), GraphicCameraInterface::getDescriptorSetLayout() };
 	m_debugPipeline.reset(new Pipeline(debugComputeShaderCreateInfo, debugDescriptorSetLayouts));
 }
 
 void RayTracedShadowsPass::createDescriptorSet()
 {
 	DescriptorSetGenerator::ImageDescription outputImageDesc(VK_IMAGE_LAYOUT_GENERAL, m_outputMask->getDefaultImageView());
-	DescriptorSetGenerator::ImageDescription preDepthImageDesc{ VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_preDepthPass->getOutput()->getDefaultImageView() };
+	DescriptorSetGenerator::ImageDescription preDepthImageDesc{ VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_preDepthPass->getCopy()->getDefaultImageView() };
 
 	DescriptorSetGenerator descriptorSetGenerator(m_descriptorSetLayoutGenerator.getDescriptorLayouts());
 	descriptorSetGenerator.setAccelerationStructure(0, m_sponzaModel->getTLAS());

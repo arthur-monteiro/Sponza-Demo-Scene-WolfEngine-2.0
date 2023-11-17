@@ -4,6 +4,8 @@
 #include <Image.h>
 
 #include "CameraInterface.h"
+#include "CameraList.h"
+#include "CommonLayout.h"
 #include "DebugMarker.h"
 #include "PreDepthPass.h"
 #include "ForwardPass.h"
@@ -42,19 +44,20 @@ void TemporalAntiAliasingPass::record(const RecordContext& context)
 {
 	const GameContext* gameContext = static_cast<const GameContext*>(context.gameContext);
 	const uint32_t currentImageIdx = context.currentFrameIdx % m_outputImages.size();
+	const CameraInterface* camera = context.cameraList->getCamera(CommonCameraIndices::CAMERA_IDX_ACTIVE);
 
 	/* Update data */
 	ReprojectionUBData reprojectionUBData;
-	reprojectionUBData.invView = glm::inverse(context.camera->getViewMatrix());
-	reprojectionUBData.invProjection = glm::inverse(context.camera->getProjectionMatrix());
-	reprojectionUBData.previousMVPMatrix = context.camera->getProjectionMatrix() * context.camera->getPreviousViewMatrix();
+	reprojectionUBData.invView = glm::inverse(camera->getViewMatrix());
+	reprojectionUBData.invProjection = glm::inverse(camera->getProjectionMatrix());
+	reprojectionUBData.previousMVPMatrix = camera->getProjectionMatrix() * camera->getPreviousViewMatrix();
 
-	const float near = context.camera->getNear();
-	const float far = context.camera->getFar();
+	const float near = camera->getNear();
+	const float far = camera->getFar();
 	reprojectionUBData.projectionParams.x = far / (far - near);
 	reprojectionUBData.projectionParams.y = (-far * near) / (far - near);
 	reprojectionUBData.screenSize = glm::uvec2(m_outputImages[currentImageIdx]->getExtent().width, m_outputImages[currentImageIdx]->getExtent().height);
-	reprojectionUBData.enableTAA = gameContext->pixelJitter != glm::vec2(0.0f, 0.0f);
+	reprojectionUBData.enableTAA = gameContext->enableTAA;
 
 	m_uniformBuffer->transferCPUMemory(&reprojectionUBData, sizeof(reprojectionUBData), 0, context.commandBufferIdx);
 

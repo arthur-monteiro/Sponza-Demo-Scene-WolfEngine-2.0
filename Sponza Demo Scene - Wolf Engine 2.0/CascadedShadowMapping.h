@@ -1,17 +1,13 @@
 #pragma once
 
-#include <glm/glm.hpp>
-
-#include <Buffer.h>
 #include <CommandBuffer.h>
 #include <CommandRecordBase.h>
 #include <DepthPassBase.h>
-#include <DescriptorSet.h>
-#include <DescriptorSetLayout.h>
-#include <DescriptorSetLayoutGenerator.h>
 #include <Image.h>
-#include <Pipeline.h>
 #include <ShaderParser.h>
+
+#include "CameraList.h"
+#include "OrthographicCamera.h"
 
 class SceneElements;
 class PreDepthPass;
@@ -19,13 +15,13 @@ class PreDepthPass;
 class CascadeDepthPass : public Wolf::DepthPassBase
 {
 public:
-	CascadeDepthPass(const Wolf::InitializationContext& context, const SceneElements& sceneElements, uint32_t width, uint32_t height, const Wolf::CommandBuffer* commandBuffer, VkDescriptorSetLayout descriptorSetLayout,
-		const Wolf::ShaderParser* vertexShaderParser, const Wolf::DescriptorSetLayoutGenerator& descriptorSetLayoutGenerator);
+	CascadeDepthPass(const Wolf::InitializationContext& context, uint32_t width, uint32_t height, const Wolf::CommandBuffer* commandBuffer, uint32_t cameraIdx);
 	CascadeDepthPass(const CascadeDepthPass&) = delete;
 
-	void getViewProjMatrix(glm::mat4& output) const { output = m_viewProjMatrix; }
-	void setMVP(const glm::mat4& view, const glm::mat4& projection);
-	void shaderChanged();
+	void getViewProjMatrix(glm::mat4& output) const { output = m_camera->getProjectionMatrix() * m_camera->getViewMatrix(); }
+	void setCameraInfos(const glm::vec3& center, float radius, const glm::vec3& direction) const;
+
+	void addCameraForThisFrame(Wolf::CameraList& cameraList) const { cameraList.addCameraForThisFrame(m_camera.get(), m_cameraIdx); }
 
 private:
 	uint32_t getWidth() override { return m_width; }
@@ -36,35 +32,19 @@ private:
 	VkImageUsageFlags getAdditionalUsages() override { return VK_IMAGE_USAGE_SAMPLED_BIT; }
 	VkImageLayout getFinalLayout() override { return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; }
 
-private:
-	void createPipeline();
-
 	/* Shared resources */
-	VkDescriptorSetLayout m_descriptorSetLayout;
-	const Wolf::ShaderParser* m_vertexShaderParser;
 	const Wolf::CommandBuffer* m_commandBuffer;
-	const SceneElements& m_sceneElements;
 
 	/* Owned resources */
-	std::unique_ptr<Wolf::Pipeline> m_pipeline;
+	std::unique_ptr<Wolf::OrthographicCamera> m_camera;
+	uint32_t m_cameraIdx;
 	uint32_t m_width, m_height;
-	static constexpr uint32_t MAX_MODELS = 2;
-	struct UBData
-	{
-		glm::mat4 mvp[MAX_MODELS];
-	};
-	UBData m_mvpData;
-	glm::mat4 m_viewProjMatrix;
-	std::unique_ptr<Wolf::Buffer> m_uniformBuffer;
-	std::unique_ptr<Wolf::DescriptorSet> m_descriptorSet;
 };
 
 class CascadedShadowMapping : public Wolf::CommandRecordBase
 {
 public:
 	static constexpr int CASCADE_COUNT = 4;
-
-	CascadedShadowMapping(const SceneElements& sceneElements);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
@@ -76,17 +56,11 @@ public:
 	void getCascadeMatrix(uint32_t cascadeIdx, glm::mat4& output) const { m_cascadeDepthPasses[cascadeIdx]->getViewProjMatrix(output); }
 	uint32_t getCascadeTextureSize(uint32_t cascadeIdx) const { return m_cascadeTextureSize[cascadeIdx]; }
 
+	void addCamerasForThisFrame(Wolf::CameraList& cameraList) const;
+
 private:
-	/* Pipeline */
-	std::unique_ptr<Wolf::ShaderParser> m_vertexShaderParser;
-	std::unique_ptr<Wolf::Pipeline> m_pipeline;
-
-	/* Resources*/
-	const SceneElements& m_sceneElements;
-	std::unique_ptr<Wolf::DescriptorSetLayout> m_descriptorSetLayout;
-
 	/* Cascades */
 	uint32_t m_cascadeTextureSize[CASCADE_COUNT] = { 3072, 3072, 3072, 3072 };
 	std::array<std::unique_ptr<CascadeDepthPass>, CASCADE_COUNT> m_cascadeDepthPasses;
-	std::array<float, CASCADE_COUNT> m_cascadeSplits;
+	std::array<float, CASCADE_COUNT> m_cascadeSplits{};
 };

@@ -19,7 +19,6 @@
 #include "ShadowMaskBasePass.h"
 
 class PreDepthPass;
-class ObjectModel;
 class RTGIPass;
 class SceneElements;
 
@@ -36,7 +35,7 @@ public:
 	void setOutputImages(const std::vector<Wolf::Image*>& images) { m_outputImages = images; }
 	void setShadowMaskPass(ShadowMaskBasePass* shadowMaskPass);
 
-	enum class DebugMode { None, Shadows };
+	enum class DebugMode { None, Shadows, RTGI };
 	void setDebugMode(DebugMode debugMode);
 
 private:

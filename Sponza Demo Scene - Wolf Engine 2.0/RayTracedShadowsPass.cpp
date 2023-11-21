@@ -15,13 +15,12 @@
 #include "PreDepthPass.h"
 #include "GameContext.h"
 #include "GraphicCameraInterface.h"
-#include "ObjectModel.h"
 
 using namespace Wolf;
 
-RayTracedShadowsPass::RayTracedShadowsPass(const ObjectModel* sponzaModel, PreDepthPass* preDepthPass)
+RayTracedShadowsPass::RayTracedShadowsPass(const Wolf::TopLevelAccelerationStructure* topLevelAccelerationStructure, PreDepthPass* preDepthPass)
 {
-	m_sponzaModel = sponzaModel;
+	m_topLevelAccelerationStructure = topLevelAccelerationStructure;
 	m_preDepthPass = preDepthPass;
 }
 
@@ -319,7 +318,7 @@ void RayTracedShadowsPass::createDescriptorSet()
 	DescriptorSetGenerator::ImageDescription preDepthImageDesc{ VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_preDepthPass->getCopy()->getDefaultImageView() };
 
 	DescriptorSetGenerator descriptorSetGenerator(m_descriptorSetLayoutGenerator.getDescriptorLayouts());
-	descriptorSetGenerator.setAccelerationStructure(0, m_sponzaModel->getTLAS());
+	descriptorSetGenerator.setAccelerationStructure(0, *m_topLevelAccelerationStructure);
 	descriptorSetGenerator.setImage(1, outputImageDesc);
 	descriptorSetGenerator.setImage(2, preDepthImageDesc);
 	descriptorSetGenerator.setBuffer(3, *m_uniformBuffer);

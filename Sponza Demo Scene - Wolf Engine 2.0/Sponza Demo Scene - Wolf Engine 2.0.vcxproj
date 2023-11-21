@@ -145,7 +145,6 @@
     <ClCompile Include="RTGIPass.cpp" />
     <ClCompile Include="ShadowMaskBasePass.cpp" />
     <ClCompile Include="ShadowMaskComputePass.cpp" />
-    <ClCompile Include="ObjectModel.cpp" />
     <ClCompile Include="SponzaScene.cpp" />
     <ClCompile Include="SystemManager.cpp" />
     <ClCompile Include="TemporalAntiAliasingPass.cpp" />
@@ -161,7 +160,6 @@
     <ClInclude Include="RTGIPass.h" />
     <ClInclude Include="ShadowMaskBasePass.h" />
     <ClInclude Include="ShadowMaskComputePass.h" />
-    <ClInclude Include="ObjectModel.h" />
     <ClInclude Include="SponzaScene.h" />
     <ClInclude Include="SystemManager.h" />
     <ClInclude Include="TemporalAntiAliasingPass.h" />

@@ -7,6 +7,7 @@
 #include "PreDepthPass.h"
 #include "ForwardPass.h"
 #include "InputHandler.h"
+#include "ModelBase.h"
 #include "RayTracedShadowsPass.h"
 #include "RTGIPass.h"
 #include "ShadowMaskComputePass.h"
@@ -35,9 +36,10 @@ private:
 
 	std::chrono::high_resolution_clock::time_point m_startTime = std::chrono::high_resolution_clock::now();
 	
-	std::unique_ptr<ObjectModel> m_sponzaModel;
-	std::unique_ptr<ObjectModel> m_cubeModel;
-	std::array<std::unique_ptr<Wolf::Image>, 5> m_cubeImages;
+	std::unique_ptr<Wolf::ModelBase> m_sponzaModel;
+	std::unique_ptr<Wolf::ModelBase> m_cubeModel;
+	std::unique_ptr<Wolf::TopLevelAccelerationStructure> m_tlas;
+
 	std::unique_ptr<Wolf::FirstPersonCamera> m_camera;
 	bool m_isLocked = false;
 

@@ -3,8 +3,6 @@
 layout(binding = 0, set = 0) uniform UniformBufferMVP
 {
     mat4 model;
-	mat4 view;
-	mat4 projection;
 } ubMVP;
 
 layout(location = 0) in vec3 inPosition;
@@ -23,7 +21,7 @@ out gl_PerVertex
 void main() 
 {
 	vec4 worldPos = ubMVP.model * vec4(inPosition, 1.0) + vec4(inWorldPos, 0.0);
-	vec4 viewPos = ubMVP.view * worldPos;
+	vec4 viewPos = getViewMatrix() * worldPos;
 
-    gl_Position = ubMVP.projection * viewPos;
+    gl_Position = getProjectionMatrix() * viewPos;
 } 

@@ -1,15 +1,14 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include <CommandRecordBase.h>
 #include <DescriptorSet.h>
 #include <DescriptorSetLayout.h>
 #include <DescriptorSetLayoutGenerator.h>
 #include <Image.h>
+#include <ModelBase.h>
 #include <PipelineSet.h>
-#include <RenderPass.h>
-#include <ShaderParser.h>
-
-#include "ObjectModel.h"
 
 class PreDepthPass;
 
@@ -18,21 +17,26 @@ class RTGIPass : public Wolf::CommandRecordBase
 public:
 	RTGIPass(PreDepthPass* preDepthPass, std::mutex* vulkanQueueLock) : m_preDepthPass(preDepthPass), m_vulkanQueueLock(vulkanQueueLock) { }
 
+	void addDebugMeshesToRenderList(Wolf::RenderMeshList& renderMeshList) const;
+	void updateGraphic() const;
+
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
 	void record(const Wolf::RecordContext& context) override;
 	void submit(const Wolf::SubmitContext& context) override;
+
+	void initializeDebugPipelineSet();
 
 private:
 	PreDepthPass* m_preDepthPass;
 	std::mutex* m_vulkanQueueLock;
 
 	inline static const glm::vec3 FIRST_PROBE_POS{ 0.0f, 0.0f, 0.0f};
-	inline static const glm::uvec3 PROBE_COUNT{ 100, 100, 100};
+	inline static const glm::uvec3 PROBE_COUNT{ 30, 30, 30};
 	inline static const glm::vec3 SPACE_BETWEEN_PROBES{ 0.5f, 0.5f, 0.5f };
 
 	// Debug
-	std::unique_ptr<ObjectModel> m_sphereModel;
+	std::unique_ptr<Wolf::ModelBase> m_sphereModel;
 
 	struct SphereInstanceData
 	{
@@ -59,6 +63,8 @@ private:
 	std::unique_ptr<Wolf::Buffer> m_sphereInstanceBuffer;
 	uint32_t m_sphereInstanceCount = 0;
 
+	std::unique_ptr<Wolf::PipelineSet> m_debugPipelineSet;
+
 	struct DebugUBData
 	{
 		glm::mat4 model;
@@ -69,7 +75,5 @@ private:
 	Wolf::DescriptorSetLayoutGenerator m_debugDescriptorSetLayoutGenerator;
 	std::unique_ptr<Wolf::DescriptorSetLayout> m_debugDescriptorSetLayout;
 	std::unique_ptr<Wolf::DescriptorSet> m_debugDescriptorSet;
-
-	std::unique_ptr<Wolf::PipelineSet> m_debugPipelineSet;
 };
 

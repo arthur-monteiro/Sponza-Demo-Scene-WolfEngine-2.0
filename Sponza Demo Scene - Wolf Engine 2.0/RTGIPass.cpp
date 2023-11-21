@@ -2,16 +2,36 @@
 
 #include <Attachment.h>
 #include <DescriptorSetGenerator.h>
+#include <glm/gtx/transform.hpp>
 
+#include "CommonLayout.h"
 #include "PreDepthPass.h"
+#include "RenderMeshList.h"
 
 using namespace Wolf;
+
+void RTGIPass::addDebugMeshesToRenderList(RenderMeshList& renderMeshList) const
+{
+	m_sphereModel->addMeshesToRenderList(renderMeshList, { m_sphereInstanceBuffer.get(), m_sphereInstanceCount });
+}
+
+void RTGIPass::updateGraphic() const
+{
+	m_sphereModel->updateGraphic();
+}
 
 void RTGIPass::initializeResources(const InitializationContext& context)
 {
 	// Debug
 	{
-		m_sphereModel.reset(new ObjectModel(m_vulkanQueueLock, glm::mat4(1.0f), false, "Models/sphere.obj", "", false, 0, nullptr));
+		ModelLoadingInfo modelLoadingInfo;
+		modelLoadingInfo.filename = "Models/sphere.obj";
+		modelLoadingInfo.mtlFolder = "Models/";
+		modelLoadingInfo.vulkanQueueLock = m_vulkanQueueLock;
+		modelLoadingInfo.loadMaterials = false;
+		modelLoadingInfo.materialIdOffset = 1;
+		m_sphereModel.reset(new ModelBase(modelLoadingInfo, false, nullptr));
+		m_sphereModel->setTransform(glm::scale(glm::vec3(0.005f)));
 
 		std::vector<SphereInstanceData> spheres;
 		spheres.reserve(static_cast<size_t>(PROBE_COUNT.x * PROBE_COUNT.y * PROBE_COUNT.z));
@@ -28,36 +48,10 @@ void RTGIPass::initializeResources(const InitializationContext& context)
 		}
 
 		m_sphereInstanceBuffer.reset(new Buffer(spheres.size() * sizeof(SphereInstanceData), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, UpdateRate::NEVER));
+		m_sphereInstanceBuffer->transferCPUMemoryWithStagingBuffer(spheres.data(), spheres.size() * sizeof(SphereInstanceData));
+		m_sphereInstanceCount = static_cast<uint32_t>(spheres.size());
 
-		
-		std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
-		Vertex3D::getAttributeDescriptions(attributeDescriptions, 0);
-		SphereInstanceData::getAttributeDescriptions(attributeDescriptions, 1, attributeDescriptions.size());
-
-		std::vector<VkVertexInputBindingDescription> bindingDescriptions(2);
-		Vertex3D::getBindingDescription(bindingDescriptions[0], 0);
-		SphereInstanceData::getBindingDescription(bindingDescriptions[1], 1);
-
-		// Shaders
-		//pipelineHandlerCreateInfo.vertexShader = "Shaders/rayTracedGlobalIllumination/debug.vert";
-		//pipelineHandlerCreateInfo.fragmentShader = "Shaders/rayTracedGlobalIllumination/debug.frag";
-
-		//// Resources
-		//m_debugUniformBuffer.reset(new Buffer(sizeof(DebugUBData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, UpdateRate::NEVER));
-
-		//m_debugDescriptorSetLayoutGenerator.addUniformBuffer(VK_SHADER_STAGE_VERTEX_BIT, 0);
-		//m_debugDescriptorSetLayout.reset(new DescriptorSetLayout(m_debugDescriptorSetLayoutGenerator.getDescriptorLayouts()));
-
-		//DescriptorSetGenerator descriptorSetGenerator(m_debugDescriptorSetLayoutGenerator.getDescriptorLayouts());
-		//descriptorSetGenerator.setBuffer(0, *m_debugUniformBuffer);
-
-		//m_debugDescriptorSet.reset(new DescriptorSet(m_debugDescriptorSetLayout->getDescriptorSetLayout(), UpdateRate::NEVER));
-		//m_debugDescriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
-
-		//std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { m_debugDescriptorSetLayout->getDescriptorSetLayout() };
-		//pipelineHandlerCreateInfo.descriptorSetLayouts = descriptorSetLayouts;
-
-		//m_pipelineHandler.reset(new SinglePipelineRenderingPassHandler(pipelineHandlerCreateInfo));
+		initializeDebugPipelineSet();
 	}
 }
 
@@ -72,4 +66,49 @@ void RTGIPass::record(const RecordContext& context)
 
 void RTGIPass::submit(const SubmitContext& context)
 {
+}
+
+void RTGIPass::initializeDebugPipelineSet()
+{
+	m_debugPipelineSet.reset(new PipelineSet);
+	PipelineSet::PipelineInfo pipelineInfo;
+
+	/* PreDepth */
+	pipelineInfo.shaderInfos.resize(1);
+	pipelineInfo.shaderInfos[0].shaderFilename = "Shaders/rayTracedGlobalIllumination/debug.vert";
+	pipelineInfo.shaderInfos[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+
+	// IA
+	Vertex3D::getAttributeDescriptions(pipelineInfo.vertexInputAttributeDescriptions, 0);
+	SphereInstanceData::getAttributeDescriptions(pipelineInfo.vertexInputAttributeDescriptions, 1, static_cast<uint32_t>(pipelineInfo.vertexInputAttributeDescriptions.size()));
+
+	pipelineInfo.vertexInputBindingDescriptions.resize(2);
+	Vertex3D::getBindingDescription(pipelineInfo.vertexInputBindingDescriptions[0], 0);
+	SphereInstanceData::getBindingDescription(pipelineInfo.vertexInputBindingDescriptions[1], 1);
+
+	// Resources
+	pipelineInfo.descriptorSetLayouts = { m_sphereModel->getDescriptorSetLayout() };
+	pipelineInfo.cameraDescriptorSlot = 1;
+	pipelineInfo.bindlessDescriptorSlot = 2;
+
+	// Color Blend
+	pipelineInfo.blendModes = { RenderingPipelineCreateInfo::BLEND_MODE::OPAQUE };
+
+	pipelineInfo.cullMode = VK_CULL_MODE_NONE;
+
+	m_debugPipelineSet->addPipeline(pipelineInfo, CommonPipelineIndices::PIPELINE_IDX_PRE_DEPTH);
+
+	/* Shadow maps */
+	m_debugPipelineSet->addEmptyPipeline(CommonPipelineIndices::PIPELINE_IDX_SHADOW_MAP);
+
+	/* Forward */
+	pipelineInfo.shaderInfos.resize(2);
+	pipelineInfo.shaderInfos[1].shaderFilename = "Shaders/rayTracedGlobalIllumination/debug.frag";
+	pipelineInfo.shaderInfos[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	pipelineInfo.descriptorSetLayouts = { m_sphereModel->getDescriptorSetLayout(), CommonDescriptorLayouts::g_commonForwardDescriptorSetLayout };
+
+	m_debugPipelineSet->addPipeline(pipelineInfo, CommonPipelineIndices::PIPELINE_IDX_FORWARD);
+
+	m_sphereModel->setPipelineSet(m_debugPipelineSet.get());
 }

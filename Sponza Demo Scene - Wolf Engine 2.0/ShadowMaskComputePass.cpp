@@ -4,7 +4,7 @@
 
 #include <CameraInterface.h>
 #include <DescriptorSetGenerator.h>
-#include <ObjLoader.h>
+#include <ModelLoader.h>
 
 #include "CameraList.h"
 #include "CommonLayout.h"

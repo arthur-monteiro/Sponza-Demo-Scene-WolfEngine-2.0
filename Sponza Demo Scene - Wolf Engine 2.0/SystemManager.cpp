@@ -179,8 +179,8 @@ void SystemManager::setDebugMode(const ultralight::JSObject& thisObject, const u
 		debugMode = ForwardPass::DebugMode::None;
 	else if (strDebugMode == "shadows")
 		debugMode = ForwardPass::DebugMode::Shadows;
-	/*else if (strDebugMode == "RTGI")
-		debugMode = ForwardPass::DebugMode::RTGI;*/
+	else if (strDebugMode == "RTGI")
+		debugMode = ForwardPass::DebugMode::RTGI;
 	else
 		Debug::sendError("Unsupported debug mode");
 

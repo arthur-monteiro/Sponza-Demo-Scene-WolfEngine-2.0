@@ -12,6 +12,11 @@
 
 #include "CameraInterface.h"
 
+namespace Wolf
+{
+	class TopLevelAccelerationStructure;
+}
+
 class PreDepthPass;
 class ObjectModel;
 class SharedGPUResources;
@@ -22,7 +27,7 @@ class SharedGPUResources;
 class RayTracedShadowsPass : public Wolf::CommandRecordBase, public ShadowMaskBasePass
 {
 public:
-	RayTracedShadowsPass(const ObjectModel* sponzaModel, PreDepthPass* preDepthPass);
+	RayTracedShadowsPass(const Wolf::TopLevelAccelerationStructure* topLevelAccelerationStructure, PreDepthPass* preDepthPass);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
@@ -45,7 +50,7 @@ private:
 	static float jitter();
 
 private:
-	const ObjectModel* m_sponzaModel;
+	const Wolf::TopLevelAccelerationStructure* m_topLevelAccelerationStructure;
 	PreDepthPass* m_preDepthPass;
 
 	std::unique_ptr<Wolf::Pipeline> m_pipeline;

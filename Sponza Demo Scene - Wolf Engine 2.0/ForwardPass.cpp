@@ -8,7 +8,7 @@
 #include <DescriptorSetGenerator.h>
 #include <Image.h>
 #include <FrameBuffer.h>
-#include <ObjLoader.h>
+#include <ModelLoader.h>
 #include <Timer.h>
 
 #include "CommonLayout.h"
@@ -157,7 +157,6 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 
 	context.renderMeshList->draw(context, m_commandBuffer->getCommandBuffer(context.commandBufferIdx), m_renderPass.get(), CommonPipelineIndices::PIPELINE_IDX_FORWARD, CommonCameraIndices::CAMERA_IDX_ACTIVE,
 		{
-			{ 2, context.bindlessDescriptorSet },
 			{ 3, m_descriptorSets[currentMaskIdx].get() }
 		});
 

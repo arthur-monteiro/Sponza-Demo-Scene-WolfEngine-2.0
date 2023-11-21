@@ -27,7 +27,6 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 	ShadowMaskBasePass* shadowPass = (m_currentPassState.shadowType == ShadowType::CSM ? static_cast<ShadowMaskBasePass*>(m_shadowMaskComputePass.get()) : static_cast<ShadowMaskBasePass*>(m_rayTracedShadowsPass.get()));
 
 	m_rayTracedGlobalIlluminationPass.reset(new RTGIPass(m_preDepthPass.get(), vulkanQueueLock));
-	wolfInstance->initializePass(m_rayTracedGlobalIlluminationPass.get());
 
 	m_forwardPass.reset(new ForwardPass(m_preDepthPass.get(), shadowPass,
 		m_rayTracedGlobalIlluminationPass.get()));
@@ -38,28 +37,43 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 	m_forwardPass->setOutputImages(m_taaComposePass->getImages());
 	wolfInstance->initializePass(m_forwardPass.get());
 
-	m_sponzaModel.reset(new ObjectModel(vulkanQueueLock, glm::scale(glm::mat4(1.0f), glm::vec3(0.01f)), wolfInstance->isRayTracingAvailable(),
-		"Models/sponza/sponza.obj", "Models/sponza", true, 1, &wolfInstance->getBindlessDescriptor()));
-	std::vector<Image*> sponzaImages;
-	m_sponzaModel->getImages(sponzaImages);
-	m_cubeModel.reset(new ObjectModel(vulkanQueueLock, glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f)), false, "Models/cube.obj", "Models/", false,
-		0, &wolfInstance->getBindlessDescriptor()));
+	wolfInstance->initializePass(m_rayTracedGlobalIlluminationPass.get());
 
-	std::vector<DescriptorSetGenerator::ImageDescription> imageDescriptions;
+	//m_sponzaModel.reset(new ObjectModel(vulkanQueueLock, glm::scale(glm::mat4(1.0f), glm::vec3(0.01f)), wolfInstance->isRayTracingAvailable(),
+	//	"Models/sponza/sponza.obj", "Models/sponza", true, 1, &wolfInstance->getBindlessDescriptor()));
 
-	std::vector<Image*> images;
-	m_sponzaModel->getImages(images);
-	for (uint32_t i = 0; i < images.size(); ++i)
+	ModelLoadingInfo modelLoadingInfo;
+	modelLoadingInfo.filename = "Models/sponza/sponza.obj";
+	modelLoadingInfo.mtlFolder = "Models/sponza";
+	modelLoadingInfo.vulkanQueueLock = vulkanQueueLock;
+	modelLoadingInfo.loadMaterials = true;
+	modelLoadingInfo.materialIdOffset = 1;
+	if (wolfInstance->isRayTracingAvailable())
 	{
-		imageDescriptions.resize(imageDescriptions.size() + 1);
-		imageDescriptions.back().imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageDescriptions.back().imageView = images[i]->getDefaultImageView();
+		VkBufferUsageFlags rayTracingFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		modelLoadingInfo.additionalVertexBufferUsages = rayTracingFlags;
+		modelLoadingInfo.additionalIndexBufferUsages = rayTracingFlags;
 	}
-	uint32_t bindlessOffset = wolfInstance->getBindlessDescriptor().addImages(imageDescriptions);
+	m_sponzaModel.reset(new ModelBase(modelLoadingInfo, wolfInstance->isRayTracingAvailable(), &wolfInstance->getBindlessDescriptor()));
+	m_sponzaModel->setTransform(glm::scale(glm::vec3(0.01f)));
+
+	modelLoadingInfo.filename = "Models/cube.obj";
+	modelLoadingInfo.mtlFolder = "Models/";
+	modelLoadingInfo.loadMaterials = false;
+	modelLoadingInfo.materialIdOffset = 0;
+	m_cubeModel.reset(new ModelBase(modelLoadingInfo, wolfInstance->isRayTracingAvailable(), &wolfInstance->getBindlessDescriptor()));
 
 	if (wolfInstance->isRayTracingAvailable())
 	{
-		m_rayTracedShadowsPass.reset(new RayTracedShadowsPass(m_sponzaModel.get(), m_preDepthPass.get()));
+		BLASInstance blasInstance;
+		blasInstance.bottomLevelAS = m_sponzaModel->getBLAS();
+		blasInstance.hitGroupIndex = 0;
+		blasInstance.transform = m_sponzaModel->getTransform();
+		blasInstance.instanceID = 0;
+		std::vector<BLASInstance> blasInstances = { blasInstance };
+		m_tlas.reset(new TopLevelAccelerationStructure(blasInstances));
+
+		m_rayTracedShadowsPass.reset(new RayTracedShadowsPass(m_tlas.get(), m_preDepthPass.get()));
 		wolfInstance->initializePass(m_rayTracedShadowsPass.get());
 	}
 
@@ -78,6 +92,7 @@ void SponzaScene::update(WolfEngine* wolfInstance, GameContext& gameContext)
 		m_forwardPass->setShadowMaskPass(shadowPass);
 		m_forwardPass->setDebugMode(nextPassState.debugMode); // changing shadow type might change debug image
 		initializePipelineSets(wolfInstance, shadowPass);
+		m_rayTracedGlobalIlluminationPass->initializeDebugPipelineSet();
 	}
 	else if (nextPassState.debugMode != m_currentPassState.debugMode)
 	{
@@ -90,6 +105,8 @@ void SponzaScene::update(WolfEngine* wolfInstance, GameContext& gameContext)
 
 	m_sponzaModel->addMeshesToRenderList(wolfInstance->getRenderMeshList());
 	m_cubeModel->addMeshesToRenderList(wolfInstance->getRenderMeshList());
+	if (m_currentPassState.debugMode == ForwardPass::DebugMode::RTGI)
+		m_rayTracedGlobalIlluminationPass->addDebugMeshesToRenderList(wolfInstance->getRenderMeshList());
 
 	wolfInstance->getCameraList().addCameraForThisFrame(m_camera.get(), CommonCameraIndices::CAMERA_IDX_ACTIVE);
 	if (m_currentPassState.shadowType == ShadowType::CSM)
@@ -99,8 +116,9 @@ void SponzaScene::update(WolfEngine* wolfInstance, GameContext& gameContext)
 
 	wolfInstance->updateEvents();
 
-	m_sponzaModel->updateGraphic(*m_camera, gameContext);
-	m_cubeModel->updateGraphic(*m_camera, gameContext);
+	m_sponzaModel->updateGraphic();
+	m_cubeModel->updateGraphic();
+	m_rayTracedGlobalIlluminationPass->updateGraphic();
 
 	const auto currentTime = std::chrono::high_resolution_clock::now();
 	const long long offsetInMicrosecond = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - m_startTime).count();
@@ -235,6 +253,7 @@ void SponzaScene::initializePipelineSets(const Wolf::WolfEngine* wolfInstance, c
 	// Resources
 	pipelineInfo.descriptorSetLayouts = { m_sponzaModel->getDescriptorSetLayout()};
 	pipelineInfo.cameraDescriptorSlot = 1;
+	pipelineInfo.bindlessDescriptorSlot = 2;
 
 	// Color Blend
 	pipelineInfo.blendModes = { RenderingPipelineCreateInfo::BLEND_MODE::OPAQUE };
@@ -254,8 +273,7 @@ void SponzaScene::initializePipelineSets(const Wolf::WolfEngine* wolfInstance, c
 	pipelineInfo.shaderInfos[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	shadowMaskPass->getConditionalBlocksToEnableWhenReadingMask(pipelineInfo.shaderInfos[1].conditionBlocksToInclude);
 
-	pipelineInfo.descriptorSetLayouts = { m_sponzaModel->getDescriptorSetLayout(), wolfInstance->getBindlessDescriptor().getDescriptorSetLayout(),
-		CommonDescriptorLayouts::g_commonForwardDescriptorSetLayout};
+	pipelineInfo.descriptorSetLayouts = { m_sponzaModel->getDescriptorSetLayout(), CommonDescriptorLayouts::g_commonForwardDescriptorSetLayout};
 
 	m_sponzaPipelineSet->addPipeline(pipelineInfo, CommonPipelineIndices::PIPELINE_IDX_FORWARD);
 

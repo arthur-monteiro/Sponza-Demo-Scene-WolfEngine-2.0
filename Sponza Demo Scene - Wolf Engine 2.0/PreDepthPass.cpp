@@ -2,7 +2,7 @@
 
 #include <DescriptorSetLayoutGenerator.h>
 #include <DescriptorSetGenerator.h>
-#include <ObjLoader.h>
+#include <ModelLoader.h>
 #include <Timer.h>
 
 #include "CommonLayout.h"

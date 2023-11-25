@@ -58,7 +58,7 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 	m_sponzaModel->setTransform(glm::scale(glm::vec3(0.01f)));
 
 	modelLoadingInfo.filename = "Models/cube.obj";
-	modelLoadingInfo.mtlFolder = "Models/";
+	modelLoadingInfo.mtlFolder = "Models";
 	modelLoadingInfo.loadMaterials = false;
 	modelLoadingInfo.materialIdOffset = 0;
 	m_cubeModel.reset(new ModelBase(modelLoadingInfo, wolfInstance->isRayTracingAvailable(), &wolfInstance->getBindlessDescriptor()));
@@ -77,6 +77,9 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 		wolfInstance->initializePass(m_rayTracedShadowsPass.get());
 	}
 
+	m_sponzaModel->updateGraphic();
+	m_cubeModel->updateGraphic();
+
 	initializePipelineSets(wolfInstance, shadowPass);
 }
 
@@ -84,6 +87,7 @@ static uint32_t screenshotId = 0;
 static bool requestedScreenshot = false;
 void SponzaScene::update(WolfEngine* wolfInstance, GameContext& gameContext)
 {
+	// Handle pass state changes
 	const PassState nextPassState = m_nextPassState; // copy info as 'm_nextPassState' can be changed between here and line 'm_currentPassState = nextPassState;'
 	if(nextPassState.shadowType != m_currentPassState.shadowType)
 	{
@@ -101,29 +105,27 @@ void SponzaScene::update(WolfEngine* wolfInstance, GameContext& gameContext)
 	}
 	m_currentPassState = nextPassState;
 
-	m_camera->setEnableJittering(gameContext.enableTAA);
-
-	m_sponzaModel->addMeshesToRenderList(wolfInstance->getRenderMeshList());
-	m_cubeModel->addMeshesToRenderList(wolfInstance->getRenderMeshList());
+	// Add meshes
+	m_sponzaModel->addMeshToRenderList(wolfInstance->getRenderMeshList());
+	m_cubeModel->addMeshToRenderList(wolfInstance->getRenderMeshList());
 	if (m_currentPassState.debugMode == ForwardPass::DebugMode::RTGI)
 		m_rayTracedGlobalIlluminationPass->addDebugMeshesToRenderList(wolfInstance->getRenderMeshList());
 
+	// Add cameras
+	m_camera->setEnableJittering(gameContext.enableTAA);
 	wolfInstance->getCameraList().addCameraForThisFrame(m_camera.get(), CommonCameraIndices::CAMERA_IDX_ACTIVE);
 	if (m_currentPassState.shadowType == ShadowType::CSM)
 	{
 		m_cascadedShadowMappingPass->addCamerasForThisFrame(wolfInstance->getCameraList());
 	}
 
-	wolfInstance->updateEvents();
-
-	m_sponzaModel->updateGraphic();
-	m_cubeModel->updateGraphic();
-	m_rayTracedGlobalIlluminationPass->updateGraphic();
+	wolfInstance->updateBeforeFrame();
 
 	const auto currentTime = std::chrono::high_resolution_clock::now();
 	const long long offsetInMicrosecond = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - m_startTime).count();
 	const float offsetInSeconds = static_cast<float>(offsetInMicrosecond) / 1'000'000.0f;
 	m_cubeModel->setPosition(glm::vec3(5.0f * glm::sin(offsetInSeconds), 2.0f, 0.0f));
+	m_cubeModel->updateGraphic();
 
 	gameContext.shadowmapScreenshotsRequested = false;
 	if(wolfInstance->getInputHandler().keyPressedThisFrame(GLFW_KEY_ESCAPE))

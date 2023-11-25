@@ -30,7 +30,7 @@ void SystemManager::run()
 			std::vector<CommandRecordBase*> passes(1);
 			passes[0] = m_loadingScreenUniquePass.get();
 
-			m_wolfInstance->updateEvents();
+			m_wolfInstance->updateBeforeFrame();
 			m_wolfInstance->frame(passes, m_loadingScreenUniquePass->getSemaphore());
 
 			m_mutex.unlock();

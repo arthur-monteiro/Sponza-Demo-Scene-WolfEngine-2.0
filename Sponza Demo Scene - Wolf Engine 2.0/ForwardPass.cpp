@@ -165,13 +165,13 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 
 	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_drawFullScreenImagePipeline->getPipelineLayout(), 0, 1,
 		m_userInterfaceDescriptorSet->getDescriptorSet(), 0, nullptr);
-	m_fullscreenRect->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+	m_fullscreenRect->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), RenderMeshList::NO_CAMERA_IDX);
 
 	if (m_usedDebugImage)
 	{
 		vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_drawFullScreenImagePipeline->getPipelineLayout(), 0, 1,
 			m_debugDescriptorSet->getDescriptorSet(), 0, nullptr);
-		m_fullscreenRect->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+		m_fullscreenRect->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), RenderMeshList::NO_CAMERA_IDX);
 	}
 
 	m_renderPass->endRenderPass(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));

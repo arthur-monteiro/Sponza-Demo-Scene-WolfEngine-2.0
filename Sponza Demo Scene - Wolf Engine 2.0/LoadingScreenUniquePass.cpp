@@ -14,6 +14,7 @@
 #include <ImageFileLoader.h>
 #include <FrameBuffer.h>
 
+#include "RenderMeshList.h"
 #include "Vertex2DTextured.h"
 
 using namespace Wolf;
@@ -122,13 +123,13 @@ void LoadingScreenUniquePass::resize(const Wolf::InitializationContext& context)
 void LoadingScreenUniquePass::record(const Wolf::RecordContext& context)
 {
 	/* Update */
-	std::chrono::steady_clock::time_point currentTimer = std::chrono::steady_clock::now();
-	float timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(currentTimer - m_startTimer).count() / 1'000.0f;
-	glm::mat4 transform = glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(0.8f, 0.75f, 0.0f)), timeDiff * 2.0f, glm::vec3(0.0f, 0.0f, 1.0f)), glm::vec3(0.15f, 0.15f, 1.0f));
+	const std::chrono::steady_clock::time_point currentTimer = std::chrono::steady_clock::now();
+	const float timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(currentTimer - m_startTimer).count() / 1'000.0f;
+	const glm::mat4 transform = glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(0.8f, 0.75f, 0.0f)), timeDiff * 2.0f, glm::vec3(0.0f, 0.0f, 1.0f)), glm::vec3(0.15f, 0.15f, 1.0f));
 	m_loadingIconUniformBuffer->transferCPUMemory(&transform, sizeof(transform), 0, context.commandBufferIdx);
 
 	/* Command buffer record */
-	uint32_t frameBufferIdx = context.swapChainImageIdx;
+	const uint32_t frameBufferIdx = context.swapChainImageIdx;
 
 	m_commandBuffer->beginCommandBuffer(context.commandBufferIdx);
 
@@ -139,11 +140,11 @@ void LoadingScreenUniquePass::record(const Wolf::RecordContext& context)
 
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_loadingScreenPipeline->getPipeline());
 	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_loadingScreenPipeline->getPipelineLayout(), 0, 1, m_loadingScreenDescriptorSet->getDescriptorSet(), 0, nullptr);
-	m_rectMesh->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+	m_rectMesh->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), RenderMeshList::NO_CAMERA_IDX);
 
 	vkCmdBindPipeline(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_loadingIconPipeline->getPipeline());
 	vkCmdBindDescriptorSets(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), VK_PIPELINE_BIND_POINT_GRAPHICS, m_loadingIconPipeline->getPipelineLayout(), 0, 1, m_loadingIconDescriptorSet->getDescriptorSet(context.commandBufferIdx), 0, nullptr);
-	m_rectMesh->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
+	m_rectMesh->draw(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), RenderMeshList::NO_CAMERA_IDX);
 
 	m_renderPass->endRenderPass(m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 

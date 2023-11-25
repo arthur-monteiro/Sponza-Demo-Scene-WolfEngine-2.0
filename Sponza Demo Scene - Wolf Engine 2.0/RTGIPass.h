@@ -18,7 +18,6 @@ public:
 	RTGIPass(PreDepthPass* preDepthPass, std::mutex* vulkanQueueLock) : m_preDepthPass(preDepthPass), m_vulkanQueueLock(vulkanQueueLock) { }
 
 	void addDebugMeshesToRenderList(Wolf::RenderMeshList& renderMeshList) const;
-	void updateGraphic() const;
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;

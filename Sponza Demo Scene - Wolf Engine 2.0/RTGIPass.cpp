@@ -12,12 +12,7 @@ using namespace Wolf;
 
 void RTGIPass::addDebugMeshesToRenderList(RenderMeshList& renderMeshList) const
 {
-	m_sphereModel->addMeshesToRenderList(renderMeshList, { m_sphereInstanceBuffer.get(), m_sphereInstanceCount });
-}
-
-void RTGIPass::updateGraphic() const
-{
-	m_sphereModel->updateGraphic();
+	m_sphereModel->addMeshToRenderList(renderMeshList, { m_sphereInstanceBuffer.get(), m_sphereInstanceCount });
 }
 
 void RTGIPass::initializeResources(const InitializationContext& context)
@@ -32,6 +27,7 @@ void RTGIPass::initializeResources(const InitializationContext& context)
 		modelLoadingInfo.materialIdOffset = 1;
 		m_sphereModel.reset(new ModelBase(modelLoadingInfo, false, nullptr));
 		m_sphereModel->setTransform(glm::scale(glm::vec3(0.005f)));
+		m_sphereModel->updateGraphic();
 
 		std::vector<SphereInstanceData> spheres;
 		spheres.reserve(static_cast<size_t>(PROBE_COUNT.x * PROBE_COUNT.y * PROBE_COUNT.z));

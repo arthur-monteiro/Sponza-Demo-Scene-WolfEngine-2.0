@@ -25,7 +25,7 @@ void RTGIPass::initializeResources(const InitializationContext& context)
 		modelLoadingInfo.vulkanQueueLock = m_vulkanQueueLock;
 		modelLoadingInfo.loadMaterials = false;
 		modelLoadingInfo.materialIdOffset = 1;
-		m_sphereModel.reset(new ModelBase(modelLoadingInfo, false, nullptr));
+		m_sphereModel.reset(new ModelBase(modelLoadingInfo, false));
 		m_sphereModel->setTransform(glm::scale(glm::vec3(0.005f)));
 		m_sphereModel->updateGraphic();
 

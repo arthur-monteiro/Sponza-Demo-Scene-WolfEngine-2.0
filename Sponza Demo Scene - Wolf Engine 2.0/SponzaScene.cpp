@@ -54,14 +54,14 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 		modelLoadingInfo.additionalVertexBufferUsages = rayTracingFlags;
 		modelLoadingInfo.additionalIndexBufferUsages = rayTracingFlags;
 	}
-	m_sponzaModel.reset(new ModelBase(modelLoadingInfo, wolfInstance->isRayTracingAvailable(), &wolfInstance->getBindlessDescriptor()));
+	m_sponzaModel.reset(new ModelBase(modelLoadingInfo, wolfInstance->isRayTracingAvailable(), wolfInstance->getBindlessDescriptor()));
 	m_sponzaModel->setTransform(glm::scale(glm::vec3(0.01f)));
 
 	modelLoadingInfo.filename = "Models/cube.obj";
 	modelLoadingInfo.mtlFolder = "Models";
 	modelLoadingInfo.loadMaterials = false;
 	modelLoadingInfo.materialIdOffset = 0;
-	m_cubeModel.reset(new ModelBase(modelLoadingInfo, wolfInstance->isRayTracingAvailable(), &wolfInstance->getBindlessDescriptor()));
+	m_cubeModel.reset(new ModelBase(modelLoadingInfo, wolfInstance->isRayTracingAvailable(), wolfInstance->getBindlessDescriptor()));
 
 	if (wolfInstance->isRayTracingAvailable())
 	{
@@ -128,13 +128,13 @@ void SponzaScene::update(WolfEngine* wolfInstance, GameContext& gameContext)
 	m_cubeModel->updateGraphic();
 
 	gameContext.shadowmapScreenshotsRequested = false;
-	if(wolfInstance->getInputHandler().keyPressedThisFrame(GLFW_KEY_ESCAPE))
+	if(wolfInstance->getInputHandler()->keyPressedThisFrame(GLFW_KEY_ESCAPE))
 	{
 		m_isLocked = !m_isLocked;
 		wolfInstance->evaluateUserInterfaceScript(m_isLocked ? "setVisibility(true)" : "setVisibility(false)");
 		m_camera->setLocked(m_isLocked);
 	}
-	if(wolfInstance->getInputHandler().keyPressedThisFrame(GLFW_KEY_SPACE))
+	if(wolfInstance->getInputHandler()->keyPressedThisFrame(GLFW_KEY_SPACE))
 	{
 		requestedScreenshot = true; // delay the request to the next frame
 

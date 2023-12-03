@@ -23,13 +23,11 @@
 mono_crash.*
 
 # Build results
-#[Dd]ebug/
 [Dd]ebugPublic/
-#[Rr]elease/
-#[Rr]eleases/
-#x64/
-#x86/
-#[Ww][Ii][Nn]32/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
@@ -37,6 +35,8 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+
+!/ThirdParty/OVR/Lib/Windows/x64/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
@@ -80,7 +80,7 @@ StyleCopReport.xml
 *_h.h
 *.ilk
 *.meta
-#*.obj
+*.obj
 *.iobj
 *.pch
 *.pdb
@@ -102,6 +102,9 @@ StyleCopReport.xml
 *.pidb
 *.svclog
 *.scc
+*.o
+*.o.d
+*.idb
 
 # Chutzpah Test files
 _Chutzpah*
@@ -374,7 +377,6 @@ FodyWeavers.xsd
 *Parsed.rmiss
 *Parsed.rchit
 *Parsed.comp
+x64/*
 *.dmp
-
-# Project Generated
 Exports/

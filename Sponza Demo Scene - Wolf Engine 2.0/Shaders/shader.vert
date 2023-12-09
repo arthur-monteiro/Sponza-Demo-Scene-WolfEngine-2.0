@@ -1,9 +1,10 @@
 #extension GL_ARB_separate_shader_objects : enable
 
-layout(binding = 0, set = 0) uniform UniformBufferMVP
+layout(binding = 0, set = 0) uniform UniformBufferTransform
 {
     mat4 model;
-} ubMVP;
+	mat4 previousModel;
+} ubTransform;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
@@ -16,7 +17,7 @@ layout(location = 1) out vec2 outTexCoord;
 layout(location = 2) out uint outMaterialID;
 layout(location = 3) out mat3 outTBN;
 layout(location = 6) out vec3 outWorldSpaceNormal;
-layout(location = 7) out vec3 outWorldSpacePos;
+layout(location = 7) out vec3 outWorldPos;
  
 out gl_PerVertex
 {
@@ -25,12 +26,15 @@ out gl_PerVertex
 
 void main() 
 {
-	vec4 viewPos = getViewMatrix() * ubMVP.model * vec4(inPosition, 1.0);
+	vec4 viewPos = getViewMatrix() * ubTransform.model * vec4(inPosition, 1.0);
 
     gl_Position = getProjectionMatrix() * viewPos;
+	vec4 clipPosNoJitter = gl_Position;
 	gl_Position.xy += getCameraJitter() * gl_Position.w;
 
-	mat3 usedModelMatrix = transpose(inverse(mat3(getViewMatrix() * ubMVP.model)));
+	vec4 previousClipPosNoJitter = getProjectionMatrix() * getPreviousViewMatrix() * ubTransform.previousModel * vec4(inPosition, 1.0);
+
+	mat3 usedModelMatrix = transpose(inverse(mat3(getViewMatrix() * ubTransform.model)));
     vec3 n = normalize(usedModelMatrix * inNormal);
 	vec3 t = normalize(usedModelMatrix * inTangent);
 	t = normalize(t - dot(t, n) * n);
@@ -41,4 +45,5 @@ void main()
     outTexCoord = inTexCoord;
 	outMaterialID = inMaterialID;
 	outWorldSpaceNormal = normalize(inNormal);
+	outWorldPos = inPosition;
 } 

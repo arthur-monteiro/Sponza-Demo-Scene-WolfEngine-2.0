@@ -130,7 +130,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\x64\Release;..\Third Party\OVR\Lib\Windows\x64\Release\VS2017;..\Third Party\freetype-2.8.1\lib\x64;..\Third Party\GLFW\lib-vc2019;..\Third Party\vulkan\Lib;..\Third Party\Wolf Engine\lib;..\Third Party\UltraLight\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\x64\Release;..\Third Party\OVR\Lib\Windows\x64\Release\VS2017;..\Third Party\GLFW\lib-vc2019;..\Third Party\vulkan\Lib;..\Third Party\Wolf Engine\lib;..\Third Party\UltraLight\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>freetype.lib;vulkan-1.lib;glfw3.lib;LibOVR.lib;UltralightCore.lib;Ultralight.lib;WebCore.lib;AppCore.lib;Engine Core.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>

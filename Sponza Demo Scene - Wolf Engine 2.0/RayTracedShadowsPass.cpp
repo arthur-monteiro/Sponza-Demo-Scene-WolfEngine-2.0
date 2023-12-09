@@ -18,10 +18,10 @@
 
 using namespace Wolf;
 
-RayTracedShadowsPass::RayTracedShadowsPass(const Wolf::TopLevelAccelerationStructure* topLevelAccelerationStructure, PreDepthPass* preDepthPass)
+RayTracedShadowsPass::RayTracedShadowsPass(const Wolf::TopLevelAccelerationStructure* topLevelAccelerationStructure, const Wolf::ResourceNonOwner<PreDepthPass>& preDepthPass)
+	: m_preDepthPass(preDepthPass)
 {
 	m_topLevelAccelerationStructure = topLevelAccelerationStructure;
-	m_preDepthPass = preDepthPass;
 }
 
 void RayTracedShadowsPass::initializeResources(const InitializationContext& context)

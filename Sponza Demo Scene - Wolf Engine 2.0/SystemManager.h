@@ -37,7 +37,7 @@ private:
 private:
 	std::unique_ptr<Wolf::WolfEngine> m_wolfInstance;
 
-	std::unique_ptr<LoadingScreenUniquePass> m_loadingScreenUniquePass;
+	Wolf::ResourceUniqueOwner<LoadingScreenUniquePass> m_loadingScreenUniquePass;
 	std::unique_ptr<SponzaScene> m_sponzaScene;
 
 	GAME_STATE m_gameState = GAME_STATE::LOADING;

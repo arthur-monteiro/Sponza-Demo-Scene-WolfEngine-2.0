@@ -23,25 +23,28 @@ using namespace Wolf;
 
 VkDescriptorSetLayout CommonDescriptorLayouts::g_commonForwardDescriptorSetLayout;
 
-ForwardPass::ForwardPass(PreDepthPass* preDepthPass, ShadowMaskBasePass* shadowMaskPass, RTGIPass* rayTracedGIPass)
+ForwardPass::ForwardPass(const ResourceNonOwner<PreDepthPass>& preDepthPass, const Wolf::ResourceNonOwner<ShadowMaskBasePass>& shadowMaskPass, const Wolf::ResourceNonOwner<RTGIPass>& rayTracedGIPass)
+	: m_preDepthPass(preDepthPass), m_shadowMaskPass(shadowMaskPass), m_rayTracedGIPass(rayTracedGIPass)
 {
 	m_preDepthPassSemaphore = preDepthPass->getSemaphore();
-	m_preDepthPass = preDepthPass;
-	m_shadowMaskPass = shadowMaskPass;
-	m_rayTracedGIPass = rayTracedGIPass;
 }
 
 void ForwardPass::initializeResources(const InitializationContext& context)
 {
 	Timer timer("Forward pass initialization");
 
+	createOutputImages(context.swapChainWidth, context.swapChainHeight);
+
 	Attachment depth({ context.swapChainWidth, context.swapChainHeight }, context.depthFormat, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 		m_preDepthPass->getOutput()->getDefaultImageView());
 	depth.loadOperation = VK_ATTACHMENT_LOAD_OP_LOAD;
 	depth.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	Attachment color({ context.swapChainWidth, context.swapChainHeight }, m_outputImages[0]->getFormat(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, nullptr);
+	Attachment color({ context.swapChainWidth, context.swapChainHeight }, m_outputImages[0]->getFormat(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		nullptr);
+	Attachment velocity({ m_velocityImage->getExtent().width, m_velocityImage->getExtent().height }, m_velocityImage->getFormat(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_ATTACHMENT_STORE_OP_STORE, 
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, m_velocityImage->getDefaultImageView());
 
-	m_renderPass.reset(new RenderPass({ depth, color }));
+	m_renderPass.reset(new RenderPass({ depth, color, velocity }));
 
 	m_commandBuffer.reset(new CommandBuffer(QueueType::GRAPHIC, false /* isTransient */));
 
@@ -49,7 +52,7 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 	for (uint32_t i = 0; i < m_outputImages.size(); ++i)
 	{
 		color.imageView = m_outputImages[i]->getDefaultImageView();
-		m_frameBuffers[i].reset(new Framebuffer(m_renderPass->getRenderPass(), { depth, color }));
+		m_frameBuffers[i].reset(new Framebuffer(m_renderPass->getRenderPass(), { depth, color, velocity }));
 	}
 
 	m_semaphore.reset(new Semaphore(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT));
@@ -96,7 +99,7 @@ void ForwardPass::initializeResources(const InitializationContext& context)
 		m_fullscreenRect.reset(new Mesh(vertices, indices));
 	}
 
-	createPipelines(context.swapChainWidth, context.swapChainHeight);
+	createUIPipeline(context.swapChainWidth, context.swapChainHeight);
 }
 
 void ForwardPass::resize(const Wolf::InitializationContext& context)
@@ -106,21 +109,28 @@ void ForwardPass::resize(const Wolf::InitializationContext& context)
 	m_frameBuffers.clear();
 	m_frameBuffers.resize(context.swapChainImageCount);
 
+	createOutputImages(context.swapChainWidth, context.swapChainHeight);
+
 	Attachment depth({ context.swapChainWidth, context.swapChainHeight }, context.depthFormat, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 		m_preDepthPass->getOutput()->getDefaultImageView());
 	depth.loadOperation = VK_ATTACHMENT_LOAD_OP_LOAD;
-	Attachment color({ context.swapChainWidth, context.swapChainHeight }, context.swapChainFormat, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, nullptr);
-	for (uint32_t i = 0; i < context.swapChainImageCount; ++i)
+	depth.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	Attachment color({ context.swapChainWidth, context.swapChainHeight }, m_outputImages[0]->getFormat(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_ATTACHMENT_STORE_OP_STORE, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		nullptr);
+	Attachment velocity({ m_velocityImage->getExtent().width, m_velocityImage->getExtent().height }, m_velocityImage->getFormat(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_ATTACHMENT_STORE_OP_STORE,
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, m_velocityImage->getDefaultImageView());
+
+	for (uint32_t i = 0; i < m_outputImages.size(); ++i)
 	{
-		color.imageView = context.swapChainImages[i]->getDefaultImageView();
-		m_frameBuffers[i].reset(new Framebuffer(m_renderPass->getRenderPass(), { depth, color }));
+		color.imageView = m_outputImages[i]->getDefaultImageView();
+		m_frameBuffers[i].reset(new Framebuffer(m_renderPass->getRenderPass(), { depth, color, velocity }));
 	}
 
-	createPipelines(context.swapChainWidth, context.swapChainHeight);
+	createUIPipeline(context.swapChainWidth, context.swapChainHeight);
 	createDescriptorSets(false);
 
 	DescriptorSetGenerator descriptorSetGenerator(m_drawFullScreenImageDescriptorSetLayoutGenerator.getDescriptorLayouts());
-	descriptorSetGenerator.setCombinedImageSampler(0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, context.userInterfaceImage->getDefaultImageView(), *m_sampler.get());
+	descriptorSetGenerator.setCombinedImageSampler(0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, context.userInterfaceImage->getDefaultImageView(), *m_sampler);
 	m_userInterfaceDescriptorSet->update(descriptorSetGenerator.getDescriptorSetCreateInfo());
 }
 
@@ -150,9 +160,10 @@ void ForwardPass::record(const Wolf::RecordContext& context)
 	if (m_usedDebugImage)
 		m_usedDebugImage->transitionImageLayout(m_commandBuffer->getCommandBuffer(context.commandBufferIdx), Image::SampledInFragmentShader(0));
 
-	std::vector<VkClearValue> clearValues(2);
+	std::vector<VkClearValue> clearValues(3);
 	clearValues[0] = { 0.0f };
 	clearValues[1] = { 0.1f, 0.1f, 0.1f, 1.0f };
+	clearValues[2] = { 0.1f, 0.1f, 0.1f, 1.0f };
 	m_renderPass->beginRenderPass(m_frameBuffers[frameBufferIdx]->getFramebuffer(), clearValues, m_commandBuffer->getCommandBuffer(context.commandBufferIdx));
 
 	context.renderMeshList->draw(context, m_commandBuffer->getCommandBuffer(context.commandBufferIdx), m_renderPass.get(), CommonPipelineIndices::PIPELINE_IDX_FORWARD, CommonCameraIndices::CAMERA_IDX_ACTIVE,
@@ -199,11 +210,11 @@ void ForwardPass::submit(const SubmitContext& context)
 		vkDeviceWaitIdle(context.device);
 		createDescriptorSetLayout();
 		createDescriptorSets(true);
-		createPipelines(m_swapChainWidth, m_swapChainHeight);
+		createUIPipeline(m_swapChainWidth, m_swapChainHeight);
 	}
 }
 
-void ForwardPass::setShadowMaskPass(ShadowMaskBasePass* shadowMaskPass)
+void ForwardPass::setShadowMaskPass(const ResourceNonOwner<ShadowMaskBasePass>& shadowMaskPass)
 {
 	m_shadowMaskPass = shadowMaskPass;
 	createDescriptorSetLayout();
@@ -226,7 +237,36 @@ void ForwardPass::setDebugMode(DebugMode debugMode)
 		createOrUpdateDebugDescriptorSet();
 }
 
-void ForwardPass::createPipelines(uint32_t width, uint32_t height)
+void ForwardPass::createOutputImages(uint32_t width, uint32_t height)
+{
+	// Color
+	{
+		CreateImageInfo createImageInfo;
+		createImageInfo.extent = { width, height, 1 };
+		createImageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+		createImageInfo.mipLevelCount = 1;
+		createImageInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+		createImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		for (ResourceUniqueOwner<Image>& m_outputImage : m_outputImages)
+		{
+			m_outputImage.reset(new Image(createImageInfo));
+			m_outputImage->setImageLayout({ VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT });
+		}
+	}
+
+	// Velocity
+	{
+		CreateImageInfo createImageInfo;
+		createImageInfo.extent = { width, height, 1 };
+		createImageInfo.format = VK_FORMAT_R16G16_SFLOAT;
+		createImageInfo.mipLevelCount = 1;
+		createImageInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+		createImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+		m_velocityImage.reset(new Image(createImageInfo));
+	}
+}
+
+void ForwardPass::createUIPipeline(uint32_t width, uint32_t height)
 {
 	// UI
 	{
@@ -254,12 +294,10 @@ void ForwardPass::createPipelines(uint32_t width, uint32_t height)
 		pipelineCreateInfo.extent = { width, height };
 
 		// Resources
-		std::vector<VkDescriptorSetLayout> descriptorSetLayouts = { m_drawFullScreenImageDescriptorSetLayout->getDescriptorSetLayout() };
-		pipelineCreateInfo.descriptorSetLayouts = descriptorSetLayouts;
+		pipelineCreateInfo.descriptorSetLayouts = { m_drawFullScreenImageDescriptorSetLayout->getDescriptorSetLayout() };
 
 		// Color Blend
-		std::vector<RenderingPipelineCreateInfo::BLEND_MODE> blendModes = { RenderingPipelineCreateInfo::BLEND_MODE::TRANS_ALPHA };
-		pipelineCreateInfo.blendModes = blendModes;
+		pipelineCreateInfo.blendModes = { RenderingPipelineCreateInfo::BLEND_MODE::TRANS_ALPHA, RenderingPipelineCreateInfo::BLEND_MODE::TRANS_ALPHA };
 
 		m_drawFullScreenImagePipeline.reset(new Pipeline(pipelineCreateInfo));
 	}

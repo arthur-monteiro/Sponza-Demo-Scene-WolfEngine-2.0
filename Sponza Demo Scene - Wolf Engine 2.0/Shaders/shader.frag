@@ -8,11 +8,12 @@ layout (location = 1) in vec2 inTexCoords;
 layout (location = 2) flat in uint inMaterialID;
 layout (location = 3) in mat3 inTBN;
 layout (location = 6) in vec3 inWorldSpaceNormal;
-layout (location = 7) in vec3 inWorldSpacePos;
+layout (location = 7) in vec3 inWorldPos;
 
 layout(binding = 0, set = 0) uniform UniformBufferMVP
 {
     mat4 model;
+    mat4 previousModel;
 } ubMVP;
 layout (binding = 3, set = 3, r32f) uniform image2D shadowMask;
 
@@ -34,6 +35,7 @@ layout (binding = 6, set = 3, rg32f) uniform image2D denoisingSamplingPattern;
 #endif
 
 layout (location = 0) out vec4 outColor;
+layout (location = 1) out vec4 outVelocity;
 
 #include "ShaderCommon.glsl"
 
@@ -118,6 +120,22 @@ void main()
     color = pow(color, vec3(1.0 / 2.2));
     
     outColor = vec4(color, 1.0);
+
+	vec4 previousScreenPos = getProjectionMatrix() * getPreviousViewMatrix() * ubMVP.previousModel * vec4(inWorldPos, 1.0);
+    previousScreenPos.xyz /= previousScreenPos.w;
+
+    vec4 currentPos = getProjectionMatrix() * getViewMatrix() * ubMVP.model * vec4(inWorldPos, 1.0);
+    currentPos.xyz /= currentPos.w;
+    vec2 velocity = currentPos.xy - previousScreenPos.xy;
+    velocity *= 0.5 * vec2(ubLighting.outputSize);
+
+    //if (abs(velocity.x) < 0.001) velocity.x = 0.0;
+    //if (abs(velocity.y) < 0.001) velocity.y = 0.0;
+
+    if (previousScreenPos.x < -1 || previousScreenPos.x > 1) velocity.x = 1000.0;
+    if (previousScreenPos.y < -1 || previousScreenPos.y > 1) velocity.y = 1000.0;
+   
+    outVelocity = vec4(velocity, 0.0, 0.0);
 }
 
 float DistributionGGX(vec3 N, vec3 H, float roughness)

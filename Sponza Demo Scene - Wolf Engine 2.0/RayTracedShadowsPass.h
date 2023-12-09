@@ -27,7 +27,7 @@ class SharedGPUResources;
 class RayTracedShadowsPass : public Wolf::CommandRecordBase, public ShadowMaskBasePass
 {
 public:
-	RayTracedShadowsPass(const Wolf::TopLevelAccelerationStructure* topLevelAccelerationStructure, PreDepthPass* preDepthPass);
+	RayTracedShadowsPass(const Wolf::TopLevelAccelerationStructure* topLevelAccelerationStructure, const Wolf::ResourceNonOwner<PreDepthPass>& preDepthPass);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
@@ -51,7 +51,7 @@ private:
 
 private:
 	const Wolf::TopLevelAccelerationStructure* m_topLevelAccelerationStructure;
-	PreDepthPass* m_preDepthPass;
+	Wolf::ResourceNonOwner<PreDepthPass> m_preDepthPass;
 
 	std::unique_ptr<Wolf::Pipeline> m_pipeline;
 

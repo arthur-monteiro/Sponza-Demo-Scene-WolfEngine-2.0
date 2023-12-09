@@ -15,7 +15,7 @@ class PreDepthPass;
 class RTGIPass : public Wolf::CommandRecordBase
 {
 public:
-	RTGIPass(PreDepthPass* preDepthPass, std::mutex* vulkanQueueLock) : m_preDepthPass(preDepthPass), m_vulkanQueueLock(vulkanQueueLock) { }
+	RTGIPass(const Wolf::ResourceNonOwner<PreDepthPass>& preDepthPass, std::mutex* vulkanQueueLock) : m_preDepthPass(preDepthPass), m_vulkanQueueLock(vulkanQueueLock) { }
 
 	void addDebugMeshesToRenderList(Wolf::RenderMeshList& renderMeshList) const;
 
@@ -27,7 +27,7 @@ public:
 	void initializeDebugPipelineSet();
 
 private:
-	PreDepthPass* m_preDepthPass;
+	Wolf::ResourceNonOwner<PreDepthPass> m_preDepthPass;
 	std::mutex* m_vulkanQueueLock;
 
 	inline static const glm::vec3 FIRST_PROBE_POS{ 0.0f, 0.0f, 0.0f};

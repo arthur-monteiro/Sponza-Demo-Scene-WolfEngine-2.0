@@ -14,10 +14,9 @@
 
 using namespace Wolf;
 
-ShadowMaskComputePass::ShadowMaskComputePass(PreDepthPass* preDepthPass, CascadedShadowMapping* csmManager)
+ShadowMaskComputePass::ShadowMaskComputePass(const Wolf::ResourceNonOwner<PreDepthPass>& preDepthPass, const Wolf::ResourceNonOwner<CascadedShadowMapping>& csmPass) :
+	m_preDepthPass(preDepthPass), m_csmPass(csmPass)
 {
-	m_preDepthPass = preDepthPass;
-	m_csmManager = csmManager;
 }
 
 void ShadowMaskComputePass::initializeResources(const Wolf::InitializationContext& context)
@@ -99,10 +98,10 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 
 	/* Update data */
 	ShadowUBData shadowUBData;
-		shadowUBData.cascadeSplits = glm::vec4(m_csmManager->getCascadeSplit(0), m_csmManager->getCascadeSplit(1), m_csmManager->getCascadeSplit(2), m_csmManager->getCascadeSplit(3));
+		shadowUBData.cascadeSplits = glm::vec4(m_csmPass->getCascadeSplit(0), m_csmPass->getCascadeSplit(1), m_csmPass->getCascadeSplit(2), m_csmPass->getCascadeSplit(3));
 	for (uint32_t cascadeIdx = 0; cascadeIdx < CascadedShadowMapping::CASCADE_COUNT; ++cascadeIdx)
 	{
-		m_csmManager->getCascadeMatrix(cascadeIdx, shadowUBData.cascadeMatrices[cascadeIdx]);
+		m_csmPass->getCascadeMatrix(cascadeIdx, shadowUBData.cascadeMatrices[cascadeIdx]);
 	}
 
 	const glm::vec2 referenceScale = glm::vec2(glm::length(shadowUBData.cascadeMatrices[0][0]), glm::length(shadowUBData.cascadeMatrices[0][1]));
@@ -113,7 +112,7 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 		shadowUBData.cascadeScales[cascadeIdx] = glm::vec4(cascadeScale1 / referenceScale, cascadeScale2 / referenceScale);
 	}
 
-	shadowUBData.cascadeTextureSize = glm::uvec4(m_csmManager->getCascadeTextureSize(0), m_csmManager->getCascadeTextureSize(1), m_csmManager->getCascadeTextureSize(2), m_csmManager->getCascadeTextureSize(3));
+	shadowUBData.cascadeTextureSize = glm::uvec4(m_csmPass->getCascadeTextureSize(0), m_csmPass->getCascadeTextureSize(1), m_csmPass->getCascadeTextureSize(2), m_csmPass->getCascadeTextureSize(3));
 
 	shadowUBData.noiseRotation = m_noiseRotations[context.currentFrameIdx % m_noiseRotations.size()];
 	shadowUBData.screenSize = glm::uvec2(m_outputMasks[currentMaskIdx]->getExtent().width, m_outputMasks[currentMaskIdx]->getExtent().height);
@@ -145,7 +144,7 @@ void ShadowMaskComputePass::record(const Wolf::RecordContext& context)
 
 void ShadowMaskComputePass::submit(const Wolf::SubmitContext& context)
 {
-	const std::vector waitSemaphores{ m_csmManager->getSemaphore(), m_preDepthPass->getSemaphore() };
+	const std::vector waitSemaphores{ m_csmPass->getSemaphore(), m_preDepthPass->getSemaphore() };
 	const std::vector signalSemaphores{ m_semaphore->getSemaphore() };
 	m_commandBuffer->submit(context.commandBufferIdx, waitSemaphores, signalSemaphores, VK_NULL_HANDLE);
 
@@ -200,7 +199,7 @@ void ShadowMaskComputePass::updateDescriptorSet() const
 	for (uint32_t i = 0; i < CascadedShadowMapping::CASCADE_COUNT; ++i)
 	{
 		shadowMapImageDescriptions[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		shadowMapImageDescriptions[i].imageView = m_csmManager->getShadowMap(i)->getDefaultImageView();
+		shadowMapImageDescriptions[i].imageView = m_csmPass->getShadowMap(i)->getDefaultImageView();
 	}
 	descriptorSetGenerator.setImages(2, shadowMapImageDescriptions);
 	descriptorSetGenerator.setSampler(3, *m_shadowMapsSampler);

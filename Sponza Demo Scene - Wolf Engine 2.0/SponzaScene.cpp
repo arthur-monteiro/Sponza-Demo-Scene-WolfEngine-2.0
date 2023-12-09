@@ -15,33 +15,6 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 {
 	m_camera.reset(new FirstPersonCamera(glm::vec3(1.4f, 1.2f, 0.3f), glm::vec3(2.0f, 0.9f, -0.3f), glm::vec3(0.0f, 1.0f, 0.0f), 0.01f, 5.0f, 16.0f / 9.0f));
 
-	m_preDepthPass.reset(new PreDepthPass(true));
-	wolfInstance->initializePass(m_preDepthPass.get());
-
-	m_cascadedShadowMappingPass.reset(new CascadedShadowMapping);
-	wolfInstance->initializePass(m_cascadedShadowMappingPass.get());
-
-	m_shadowMaskComputePass.reset(new ShadowMaskComputePass(m_preDepthPass.get(), m_cascadedShadowMappingPass.get()));
-	wolfInstance->initializePass(m_shadowMaskComputePass.get());
-
-	ShadowMaskBasePass* shadowPass = (m_currentPassState.shadowType == ShadowType::CSM ? static_cast<ShadowMaskBasePass*>(m_shadowMaskComputePass.get()) : static_cast<ShadowMaskBasePass*>(m_rayTracedShadowsPass.get()));
-
-	m_rayTracedGlobalIlluminationPass.reset(new RTGIPass(m_preDepthPass.get(), vulkanQueueLock));
-
-	m_forwardPass.reset(new ForwardPass(m_preDepthPass.get(), shadowPass,
-		m_rayTracedGlobalIlluminationPass.get()));
-	
-	m_taaComposePass.reset(new TemporalAntiAliasingPass(m_preDepthPass.get(), m_forwardPass.get()));
-	wolfInstance->initializePass(m_taaComposePass.get());
-
-	m_forwardPass->setOutputImages(m_taaComposePass->getImages());
-	wolfInstance->initializePass(m_forwardPass.get());
-
-	wolfInstance->initializePass(m_rayTracedGlobalIlluminationPass.get());
-
-	//m_sponzaModel.reset(new ObjectModel(vulkanQueueLock, glm::scale(glm::mat4(1.0f), glm::vec3(0.01f)), wolfInstance->isRayTracingAvailable(),
-	//	"Models/sponza/sponza.obj", "Models/sponza", true, 1, &wolfInstance->getBindlessDescriptor()));
-
 	ModelLoadingInfo modelLoadingInfo;
 	modelLoadingInfo.filename = "Models/sponza/sponza.obj";
 	modelLoadingInfo.mtlFolder = "Models/sponza";
@@ -72,12 +45,39 @@ SponzaScene::SponzaScene(WolfEngine* wolfInstance, std::mutex* vulkanQueueLock)
 		blasInstance.instanceID = 0;
 		std::vector<BLASInstance> blasInstances = { blasInstance };
 		m_tlas.reset(new TopLevelAccelerationStructure(blasInstances));
-
-		m_rayTracedShadowsPass.reset(new RayTracedShadowsPass(m_tlas.get(), m_preDepthPass.get()));
-		wolfInstance->initializePass(m_rayTracedShadowsPass.get());
 	}
 
+	m_preDepthPass.reset(new PreDepthPass(true));
+	wolfInstance->initializePass(m_preDepthPass.createNonOwnerResource<CommandRecordBase>());
+
+	m_cascadedShadowMappingPass.reset(new CascadedShadowMapping);
+	wolfInstance->initializePass(m_cascadedShadowMappingPass.createNonOwnerResource<CommandRecordBase>());
+
+	m_shadowMaskComputePass.reset(new ShadowMaskComputePass(m_preDepthPass.createNonOwnerResource(), m_cascadedShadowMappingPass.createNonOwnerResource()));
+	wolfInstance->initializePass(m_shadowMaskComputePass.createNonOwnerResource<CommandRecordBase>());
+
+	if (wolfInstance->isRayTracingAvailable())
+	{
+		m_rayTracedShadowsPass.reset(new RayTracedShadowsPass(m_tlas.get(), m_preDepthPass.createNonOwnerResource()));
+		wolfInstance->initializePass(m_rayTracedShadowsPass.createNonOwnerResource<CommandRecordBase>());
+	}
+
+	const ResourceNonOwner<ShadowMaskBasePass> shadowPass = m_currentPassState.shadowType == ShadowType::CSM ? m_shadowMaskComputePass.createNonOwnerResource<ShadowMaskBasePass>() : 
+		m_rayTracedShadowsPass.createNonOwnerResource<ShadowMaskBasePass>();
+
+	m_rayTracedGlobalIlluminationPass.reset(new RTGIPass(m_preDepthPass.createNonOwnerResource(), vulkanQueueLock));
+
+	m_forwardPass.reset(new ForwardPass(m_preDepthPass.createNonOwnerResource(), shadowPass,
+		m_rayTracedGlobalIlluminationPass.createNonOwnerResource()));
+	wolfInstance->initializePass(m_forwardPass.createNonOwnerResource<CommandRecordBase>());
+	
+	m_taaComposePass.reset(new TemporalAntiAliasingPass(m_preDepthPass.createNonOwnerResource(), m_forwardPass.createNonOwnerResource()));
+	wolfInstance->initializePass(m_taaComposePass.createNonOwnerResource<CommandRecordBase>());
+
+	wolfInstance->initializePass(m_rayTracedGlobalIlluminationPass.createNonOwnerResource<CommandRecordBase>());
+
 	m_sponzaModel->updateGraphic();
+	m_sponzaModel->updateGraphic(); // call twice to set previous matrix
 	m_cubeModel->updateGraphic();
 
 	initializePipelineSets(wolfInstance, shadowPass);
@@ -92,7 +92,8 @@ void SponzaScene::update(WolfEngine* wolfInstance, GameContext& gameContext)
 	if(nextPassState.shadowType != m_currentPassState.shadowType)
 	{
 		wolfInstance->waitIdle();
-		ShadowMaskBasePass* shadowPass = nextPassState.shadowType == ShadowType::CSM ? static_cast<ShadowMaskBasePass*>(m_shadowMaskComputePass.get()) : static_cast<ShadowMaskBasePass*>(m_rayTracedShadowsPass.get());
+		const ResourceNonOwner<ShadowMaskBasePass> shadowPass = nextPassState.shadowType == ShadowType::CSM ? m_shadowMaskComputePass.createNonOwnerResource<ShadowMaskBasePass>() :
+			m_rayTracedShadowsPass.createNonOwnerResource<ShadowMaskBasePass>();
 		m_forwardPass->setShadowMaskPass(shadowPass);
 		m_forwardPass->setDebugMode(nextPassState.debugMode); // changing shadow type might change debug image
 		initializePipelineSets(wolfInstance, shadowPass);
@@ -215,27 +216,27 @@ void SponzaScene::update(WolfEngine* wolfInstance, GameContext& gameContext)
 	}
 }
 
-void SponzaScene::frame(WolfEngine* wolfInstance) const
+void SponzaScene::frame(WolfEngine* wolfInstance)
 {
-	std::vector<CommandRecordBase*> passes;
-	passes.push_back(m_preDepthPass.get());
+	std::vector<ResourceNonOwner<CommandRecordBase>> passes;
+	passes.push_back(m_preDepthPass.createNonOwnerResource<CommandRecordBase>());
 	if(m_currentPassState.shadowType == ShadowType::CSM)
 	{
-		passes.push_back(m_cascadedShadowMappingPass.get());
-		passes.push_back(m_shadowMaskComputePass.get());
+		passes.push_back(m_cascadedShadowMappingPass.createNonOwnerResource<CommandRecordBase>());
+		passes.push_back(m_shadowMaskComputePass.createNonOwnerResource<CommandRecordBase>());
 	}
 	else
 	{
-		passes.push_back(m_rayTracedShadowsPass.get());
+		passes.push_back(m_rayTracedShadowsPass.createNonOwnerResource<CommandRecordBase>());
 	}
 	//passes.push_back(m_rayTracedGlobalIlluminationPass.get());
-	passes.push_back(m_forwardPass.get());
-	passes.push_back(m_taaComposePass.get());
+	passes.push_back(m_forwardPass.createNonOwnerResource<CommandRecordBase>());
+	passes.push_back(m_taaComposePass.createNonOwnerResource<CommandRecordBase>());
 
 	wolfInstance->frame(passes, m_taaComposePass->getSemaphore());
 }
 
-void SponzaScene::initializePipelineSets(const Wolf::WolfEngine* wolfInstance, const ShadowMaskBasePass* shadowMaskPass)
+void SponzaScene::initializePipelineSets(const Wolf::WolfEngine* wolfInstance, const Wolf::ResourceNonOwner<ShadowMaskBasePass>& shadowMaskPass)
 {
 	m_sponzaPipelineSet.reset(new PipelineSet);
 
@@ -258,7 +259,7 @@ void SponzaScene::initializePipelineSets(const Wolf::WolfEngine* wolfInstance, c
 	pipelineInfo.bindlessDescriptorSlot = 2;
 
 	// Color Blend
-	pipelineInfo.blendModes = { RenderingPipelineCreateInfo::BLEND_MODE::OPAQUE };
+	pipelineInfo.blendModes = { RenderingPipelineCreateInfo::BLEND_MODE::OPAQUE, RenderingPipelineCreateInfo::BLEND_MODE::OPAQUE };
 
 	m_sponzaPipelineSet->addPipeline(pipelineInfo, CommonPipelineIndices::PIPELINE_IDX_PRE_DEPTH);
 

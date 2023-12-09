@@ -9,7 +9,7 @@ SystemManager::SystemManager()
 	createWolfInstance();
 
 	m_loadingScreenUniquePass.reset(new LoadingScreenUniquePass());
-	m_wolfInstance->initializePass(m_loadingScreenUniquePass.get());
+	m_wolfInstance->initializePass(m_loadingScreenUniquePass.createNonOwnerResource<CommandRecordBase>());
 
 	m_sceneLoadingThread = std::thread(&SystemManager::loadSponzaScene, this);
 }
@@ -27,8 +27,9 @@ void SystemManager::run()
 		if (m_gameState == GAME_STATE::LOADING)
 		{
 			m_mutex.lock();
-			std::vector<CommandRecordBase*> passes(1);
-			passes[0] = m_loadingScreenUniquePass.get();
+			std::vector<ResourceNonOwner<CommandRecordBase>> passes;
+			passes.reserve(1);
+			passes.push_back(m_loadingScreenUniquePass.createNonOwnerResource<CommandRecordBase>());
 
 			m_wolfInstance->updateBeforeFrame();
 			m_wolfInstance->frame(passes, m_loadingScreenUniquePass->getSemaphore());

@@ -19,7 +19,7 @@ class SharedGPUResources;
 class ShadowMaskComputePass : public Wolf::CommandRecordBase, public ShadowMaskBasePass
 {
 public:
-	ShadowMaskComputePass(PreDepthPass* preDepthPass, CascadedShadowMapping* csmManager);
+	ShadowMaskComputePass(const Wolf::ResourceNonOwner<PreDepthPass>& preDepthPass, const Wolf::ResourceNonOwner<CascadedShadowMapping>& csmPass);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
@@ -49,8 +49,8 @@ private:
 	std::unique_ptr<Wolf::DescriptorSetLayout> m_descriptorSetLayout;
 	std::array<std::unique_ptr<Wolf::DescriptorSet>, MASK_COUNT> m_descriptorSets;
 	std::array<float, 16> m_noiseRotations;
-	PreDepthPass* m_preDepthPass;
-	CascadedShadowMapping* m_csmManager;
+	Wolf::ResourceNonOwner<PreDepthPass> m_preDepthPass;
+	Wolf::ResourceNonOwner<CascadedShadowMapping> m_csmPass;
 	struct ShadowUBData
 	{
 		glm::uvec2 screenSize;

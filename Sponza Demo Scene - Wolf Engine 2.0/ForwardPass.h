@@ -13,6 +13,7 @@
 #include <Mesh.h>
 #include <Pipeline.h>
 #include <RenderPass.h>
+#include <ResourceUniqueOwner.h>
 #include <Sampler.h>
 #include <ShaderParser.h>
 
@@ -25,35 +26,40 @@ class SceneElements;
 class ForwardPass : public Wolf::CommandRecordBase
 {
 public:
-	ForwardPass(PreDepthPass* preDepthPass, ShadowMaskBasePass* shadowMaskPass, RTGIPass* rayTracedGIPass);
+	ForwardPass(const Wolf::ResourceNonOwner<PreDepthPass>& preDepthPass, const Wolf::ResourceNonOwner<ShadowMaskBasePass>& shadowMaskPass, const Wolf::ResourceNonOwner<RTGIPass>& rayTracedGIPass);
 
 	void initializeResources(const Wolf::InitializationContext& context) override;
 	void resize(const Wolf::InitializationContext& context) override;
 	void record(const Wolf::RecordContext& context) override;
 	void submit(const Wolf::SubmitContext& context) override;
 
-	void setOutputImages(const std::vector<Wolf::Image*>& images) { m_outputImages = images; }
-	void setShadowMaskPass(ShadowMaskBasePass* shadowMaskPass);
+	uint32_t getOutputImageCount() const { return static_cast<uint32_t>(m_outputImages.size()); }
+	Wolf::ResourceNonOwner<Wolf::Image> getOutputImage(uint32_t idx) { return m_outputImages[idx].createNonOwnerResource(); }
+	Wolf::ResourceNonOwner<Wolf::Image> getVelocityImage() { return m_velocityImage.createNonOwnerResource(); }
+	
+	void setShadowMaskPass(const Wolf::ResourceNonOwner<ShadowMaskBasePass>& shadowMaskPass);
 
 	enum class DebugMode { None, Shadows, RTGI };
 	void setDebugMode(DebugMode debugMode);
 
 private:
-	void createPipelines(uint32_t width, uint32_t height);
+	void createOutputImages(uint32_t width, uint32_t height);
+	void createUIPipeline(uint32_t width, uint32_t height);
 	void createDescriptorSetLayout();
 	void createDescriptorSets(bool forceReset);
 	void createOrUpdateDebugDescriptorSet();
 
 private:
 	std::unique_ptr<Wolf::RenderPass> m_renderPass;
-	PreDepthPass* m_preDepthPass;
-
-	std::vector<Wolf::Image*> m_outputImages;
+	Wolf::ResourceNonOwner<PreDepthPass> m_preDepthPass;
+	
+	std::array<Wolf::ResourceUniqueOwner<Wolf::Image>, 2> m_outputImages;
+	Wolf::ResourceUniqueOwner<Wolf::Image> m_velocityImage;
 	std::vector<std::unique_ptr<Wolf::Framebuffer>> m_frameBuffers;
 	
 	const Wolf::Semaphore* m_preDepthPassSemaphore;
-	ShadowMaskBasePass* m_shadowMaskPass;
-	RTGIPass* m_rayTracedGIPass;
+	Wolf::ResourceNonOwner<ShadowMaskBasePass> m_shadowMaskPass;
+	Wolf::ResourceNonOwner<RTGIPass> m_rayTracedGIPass;
 
 	/* Pipeline */
 	std::unique_ptr<Wolf::ShaderParser> m_userInterfaceVertexShaderParser;

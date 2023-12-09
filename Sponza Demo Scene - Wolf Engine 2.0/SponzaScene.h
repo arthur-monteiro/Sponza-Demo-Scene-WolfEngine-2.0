@@ -21,7 +21,7 @@ public:
 	SponzaScene(Wolf::WolfEngine* wolfInstance, std::mutex* vulkanQueueLock);
 
 	void update(Wolf::WolfEngine* wolfInstance, GameContext& gameContext);
-	void frame(Wolf::WolfEngine* wolfInstance) const;
+	void frame(Wolf::WolfEngine* wolfInstance);
 
 	enum class ShadowType
 	{
@@ -32,7 +32,7 @@ public:
 	void setDebugMode(ForwardPass::DebugMode debugMode) { m_nextPassState.debugMode = debugMode; }
 
 private:
-	void initializePipelineSets(const Wolf::WolfEngine* wolfInstance, const ShadowMaskBasePass* shadowMaskPass);
+	void initializePipelineSets(const Wolf::WolfEngine* wolfInstance, const Wolf::ResourceNonOwner<ShadowMaskBasePass>& shadowMaskPass);
 
 	std::chrono::high_resolution_clock::time_point m_startTime = std::chrono::high_resolution_clock::now();
 	
@@ -47,21 +47,21 @@ private:
 	std::unique_ptr<Wolf::PipelineSet> m_sponzaPipelineSet;
 
 	// PreDepth
-	std::unique_ptr<PreDepthPass> m_preDepthPass;
+	Wolf::ResourceUniqueOwner<PreDepthPass> m_preDepthPass;
 
 	// Shadows
-	std::unique_ptr<CascadedShadowMapping> m_cascadedShadowMappingPass;
-	std::unique_ptr<ShadowMaskComputePass> m_shadowMaskComputePass;
-	std::unique_ptr<RayTracedShadowsPass> m_rayTracedShadowsPass;
-
-	// Direct lighting
-	std::unique_ptr<ForwardPass> m_forwardPass;
+	Wolf::ResourceUniqueOwner<CascadedShadowMapping> m_cascadedShadowMappingPass;
+	Wolf::ResourceUniqueOwner<ShadowMaskComputePass> m_shadowMaskComputePass;
+	Wolf::ResourceUniqueOwner<RayTracedShadowsPass> m_rayTracedShadowsPass;
 
 	// Global Illumination
-	std::unique_ptr<RTGIPass> m_rayTracedGlobalIlluminationPass;
+	Wolf::ResourceUniqueOwner<RTGIPass> m_rayTracedGlobalIlluminationPass;
+
+	// Direct lighting
+	Wolf::ResourceUniqueOwner<ForwardPass> m_forwardPass;
 
 	// Post process
-	std::unique_ptr<TemporalAntiAliasingPass> m_taaComposePass;
+	Wolf::ResourceUniqueOwner<TemporalAntiAliasingPass> m_taaComposePass;
 
 	struct PassState
 	{
